@@ -488,6 +488,19 @@ async function deleteCard(id) {
   await loadCards();
 }
 
+document.getElementById('btn-deactivate-all').addEventListener('click', async () => {
+  if (!currentDeckId) return;
+  if (!confirm('Désactiver toutes les cartes de ce paquet ? Elles seront invisibles pour les élèves mais conservées avec leur progression.')) return;
+  await db.from('cards').update({ is_active: false }).eq('deck_id', currentDeckId);
+  await loadCards();
+});
+
+document.getElementById('btn-activate-all').addEventListener('click', async () => {
+  if (!currentDeckId) return;
+  await db.from('cards').update({ is_active: true }).eq('deck_id', currentDeckId);
+  await loadCards();
+});
+
 document.getElementById('btn-clear-deck').addEventListener('click', async () => {
   if (!currentDeckId) return;
   if (!confirm('Supprimer TOUTES les cartes de ce paquet ? Cette action est irréversible.')) return;

@@ -223,9 +223,13 @@
         </div>
 
         <div class="panel">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
             <h3>Cartes (<span id="cards-count">…</span>)</h3>
-            <button class="btn-danger" id="btn-clear-deck">Vider le paquet</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn-secondary" id="btn-activate-all" style="width:auto">Tout activer</button>
+              <button class="btn-sm" id="btn-deactivate-all" style="background:#F1F5F9;color:var(--text);padding:8px 14px;border-radius:8px">Tout désactiver</button>
+              <button class="btn-danger" id="btn-clear-deck">Vider le paquet</button>
+            </div>
           </div>
           <div style="overflow-x:auto">
             <table id="cards-table">
