@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Flashcards</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ── VUE : CONNEXION ───────────────────────────────────── -->
+  <div id="view-login" class="view active">
+    <div class="container">
+      <div class="app-icon">🧠</div>
+      <h1>Flashcards</h1>
+      <p class="subtitle">Révise tes leçons chaque jour</p>
+      <form id="login-form">
+        <input type="text" id="input-firstname" placeholder="Prénom" autocomplete="given-name" required>
+        <input type="text" id="input-lastname" placeholder="Nom" autocomplete="family-name" required>
+        <button type="submit" class="btn-primary">Commencer →</button>
+      </form>
+      <p id="login-error" class="error hidden"></p>
+    </div>
+  </div>
+
+  <!-- ── VUE : LISTE DES PAQUETS ──────────────────────────── -->
+  <div id="view-decks" class="view">
+    <div class="top-bar">
+      <span class="top-bar-name" id="topbar-name"></span>
+      <button class="btn-ghost" id="btn-logout">Changer d'élève</button>
+    </div>
+    <div class="container">
+      <h2>Choisir un paquet</h2>
+      <div id="decks-list"><div class="spinner">Chargement…</div></div>
+    </div>
+  </div>
+
+  <!-- ── VUE : RÉVISION ───────────────────────────────────── -->
+  <div id="view-review" class="view">
+    <div class="review-header">
+      <div class="progress-row">
+        <button class="btn-ghost" id="btn-back-review">← Retour</button>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" id="progress-bar" style="width:0%"></div>
+        </div>
+        <span class="progress-count" id="progress-count"></span>
+      </div>
+    </div>
+    <div class="card-wrap">
+      <div class="box-chip" id="box-chip"></div>
+      <div class="flashcard" id="flashcard">
+        <div class="card-section-label">Question</div>
+        <div class="card-content" id="card-front"></div>
+        <hr class="card-divider hidden" id="card-divider">
+        <div class="card-section-label hidden" id="card-back-label">Réponse</div>
+        <div class="card-content hidden" id="card-back"></div>
+      </div>
+    </div>
+    <div class="action-bar" id="action-bar">
+      <button class="btn-primary" id="btn-flip">Voir la réponse</button>
+    </div>
+    <div class="action-bar hidden" id="action-bar-answer">
+      <button class="btn-wrong" id="btn-wrong">✗ Je ne savais pas</button>
+      <button class="btn-correct" id="btn-correct">✓ Je savais</button>
+    </div>
+  </div>
+
+  <!-- ── VUE : FIN DE SESSION ─────────────────────────────── -->
+  <div id="view-end" class="view">
+    <div class="container">
+      <div class="end-emoji" id="end-emoji"></div>
+      <div class="end-title" id="end-title"></div>
+      <div class="stat-card" id="end-stats"></div>
+      <button class="btn-primary" id="btn-back-end">Retour aux paquets</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

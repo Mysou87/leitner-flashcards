@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Administration — Flashcards</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin-body">
+
+  <!-- ── CONNEXION ADMIN ───────────────────────────────────── -->
+  <div id="admin-login" class="admin-login-wrap">
+    <div class="admin-login-box">
+      <div style="font-size:2rem;margin-bottom:8px">🔒</div>
+      <h1>Administration</h1>
+      <p>Accès réservé aux professeurs</p>
+      <form id="admin-login-form">
+        <input type="password" id="admin-pwd" placeholder="Mot de passe" required>
+        <button type="submit" class="btn-primary" style="margin-top:8px">Connexion</button>
+      </form>
+      <p id="admin-login-error" class="error hidden">Mot de passe incorrect.</p>
+    </div>
+  </div>
+
+  <!-- ── PANNEAU ADMIN ─────────────────────────────────────── -->
+  <div id="admin-panel" class="hidden">
+    <nav class="admin-nav">
+      <span class="admin-nav-title">🧠 Admin</span>
+      <div class="admin-tab active" data-tab="dashboard">Tableau de bord</div>
+      <div class="admin-tab" data-tab="students">Élèves</div>
+      <div class="admin-tab" data-tab="decks">Paquets</div>
+      <div class="admin-tab" data-tab="cards">Cartes</div>
+    </nav>
+
+    <div class="admin-content">
+
+      <!-- ── TABLEAU DE BORD ─────────────────────────────── -->
+      <div id="tab-dashboard" class="admin-section active">
+        <h2>Tableau de bord</h2>
+        <div class="stat-grid" id="dash-stats"></div>
+        <div class="panel">
+          <h3>Activité récente (7 derniers jours)</h3>
+          <div id="dash-activity"><div class="spinner">Chargement…</div></div>
+        </div>
+        <div class="panel">
+          <h3>Progression par élève</h3>
+          <div id="dash-progress"><div class="spinner">Chargement…</div></div>
+        </div>
+      </div>
+
+      <!-- ── ÉLÈVES ──────────────────────────────────────── -->
+      <div id="tab-students" class="admin-section">
+        <h2>Élèves</h2>
+
+        <div class="panel">
+          <h3>Ajouter un élève</h3>
+          <form id="form-add-student">
+            <div class="form-row">
+              <div>
+                <label>Prénom</label>
+                <input type="text" id="s-firstname" placeholder="Marie" required>
+              </div>
+              <div>
+                <label>Nom</label>
+                <input type="text" id="s-lastname" placeholder="Dupont" required>
+              </div>
+              <div>
+                <label>Année</label>
+                <input type="text" id="s-year" placeholder="5e" required>
+              </div>
+            </div>
+            <button type="submit" class="btn-secondary" style="width:auto">Ajouter</button>
+          </form>
+          <p id="add-student-msg" class="hidden" style="margin-top:8px"></p>
+        </div>
+
+        <div class="panel">
+          <h3>Import CSV — Rentrée scolaire</h3>
+          <p style="font-size:0.85rem;color:var(--text-light);margin-bottom:12px">
+            Format attendu : <code>prenom;nom;annee</code> (une ligne par élève, sans en-tête).<br>
+            Les élèves existants voient leur année mise à jour. Les nouveaux sont créés.
+          </p>
+          <input type="file" id="csv-file" accept=".csv,.txt" style="margin-bottom:10px;font-size:0.88rem">
+          <div>
+            <button class="btn-secondary" id="btn-import-csv" style="width:auto">Importer</button>
+          </div>
+          <div id="import-preview" class="hidden" style="margin-top:16px">
+            <div id="import-summary" style="font-size:0.88rem;margin-bottom:12px"></div>
+            <div id="import-absent" class="hidden" style="margin-bottom:12px"></div>
+            <button class="btn-primary" id="btn-confirm-import">Confirmer l'import</button>
+          </div>
+          <p id="import-msg" class="hidden" style="margin-top:8px"></p>
+        </div>
+
+        <div class="panel">
+          <h3>Liste des élèves (<span id="student-count">…</span>)</h3>
+          <div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <input type="text" id="search-students" placeholder="Rechercher…"
+              style="max-width:220px;padding:8px 12px;font-size:0.88rem">
+            <select id="filter-year" style="padding:8px 12px;font-size:0.88rem;width:auto">
+              <option value="">Toutes les années</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto">
+            <table id="students-table">
+              <thead>
+                <tr>
+                  <th>Nom</th>
+                  <th>Prénom</th>
+                  <th>Année</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="students-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PAQUETS ──────────────────────────────────────── -->
+      <div id="tab-decks" class="admin-section">
+        <h2>Paquets de flashcards</h2>
+        <div class="panel">
+          <h3>Créer un paquet</h3>
+          <form id="form-add-deck">
+            <div class="form-row">
+              <div>
+                <label>Nom du paquet</label>
+                <input type="text" id="d-name" placeholder="Atomes et molécules" required>
+              </div>
+              <div>
+                <label>Matière</label>
+                <input type="text" id="d-subject" placeholder="Chimie" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>Année</label>
+                <input type="text" id="d-year" placeholder="5e" required>
+              </div>
+              <div>
+                <label>Professeur</label>
+                <input type="text" id="d-teacher" placeholder="Mme Martin">
+              </div>
+            </div>
+            <button type="submit" class="btn-secondary" style="width:auto">Créer</button>
+          </form>
+          <p id="add-deck-msg" class="hidden" style="margin-top:8px"></p>
+        </div>
+
+        <div class="panel">
+          <h3>Liste des paquets</h3>
+          <div style="overflow-x:auto">
+            <table id="decks-table">
+              <thead>
+                <tr>
+                  <th>Nom</th>
+                  <th>Matière</th>
+                  <th>Année</th>
+                  <th>Prof</th>
+                  <th>Cartes</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="decks-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── CARTES ───────────────────────────────────────── -->
+      <div id="tab-cards" class="admin-section">
+        <button class="back-link" id="btn-back-to-decks">← Retour aux paquets</button>
+        <h2 id="cards-deck-title">Cartes du paquet</h2>
+
+        <div class="panel">
+          <h3>Ajouter une carte</h3>
+          <form id="form-add-card">
+            <div>
+              <label>Question (recto) — Markdown supporté</label>
+              <textarea id="c-front" placeholder="Quelle est la formule de l'eau ?" required></textarea>
+            </div>
+            <div>
+              <label>Réponse (verso) — Markdown supporté</label>
+              <textarea id="c-back" placeholder="H₂O" required></textarea>
+            </div>
+            <button type="submit" class="btn-secondary" style="width:auto">Ajouter la carte</button>
+          </form>
+          <p id="add-card-msg" class="hidden" style="margin-top:8px"></p>
+        </div>
+
+        <div class="panel">
+          <h3>Cartes (<span id="cards-count">…</span>)</h3>
+          <div style="overflow-x:auto">
+            <table id="cards-table">
+              <thead>
+                <tr>
+                  <th style="width:40%">Question</th>
+                  <th style="width:40%">Réponse</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="cards-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /admin-content -->
+  </div><!-- /admin-panel -->
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
