@@ -442,3 +442,67 @@ async function toggleCard(id, isActive) {
   await db.from('cards').update({ is_active: !isActive }).eq('id', id);
   await loadCards();
 }
+
+// ── Import Markdown ───────────────────────────────────────────
+let parsedMdCards = [];
+
+function parseMarkdownFlashcards(text) {
+  const cards = [];
+  const sections = text.split(/^## /m).filter(s => s.trim());
+  sections.forEach(section => {
+    const lines = section.trim().split('\n');
+    const front = lines[0].trim();
+    const back = lines.slice(1).join('\n').trim();
+    if (front && back) cards.push({ front, back });
+  });
+  return cards;
+}
+
+function handleMarkdownParse(text) {
+  parsedMdCards = parseMarkdownFlashcards(text);
+  if (parsedMdCards.length === 0) {
+    alert('Aucune carte trouvée. Vérifie le format : ## Question suivie de la réponse.');
+    return;
+  }
+  document.getElementById('md-preview-count').textContent =
+    `${parsedMdCards.length} carte(s) détectée(s) — aperçu :`;
+  document.getElementById('md-preview-list').innerHTML = parsedMdCards.map((c, i) => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <strong>Q${i + 1} :</strong> ${c.front}<br>
+      <span style="color:var(--text-light)">R : ${c.back.length > 100 ? c.back.slice(0, 100) + '…' : c.back}</span>
+    </div>`).join('');
+  document.getElementById('md-preview').classList.remove('hidden');
+}
+
+document.getElementById('btn-parse-md').addEventListener('click', () => {
+  const text = document.getElementById('md-import-text').value;
+  if (!text.trim()) { alert('Colle d\'abord ton texte markdown.'); return; }
+  handleMarkdownParse(text);
+});
+
+document.getElementById('md-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => handleMarkdownParse(ev.target.result);
+  reader.readAsText(file, 'UTF-8');
+});
+
+document.getElementById('btn-confirm-md-import').addEventListener('click', async () => {
+  if (!currentDeckId || parsedMdCards.length === 0) return;
+  const btn = document.getElementById('btn-confirm-md-import');
+  btn.disabled = true;
+  btn.textContent = 'Import en cours…';
+  const { error } = await db.from('cards').insert(
+    parsedMdCards.map(c => ({ deck_id: currentDeckId, front: c.front, back: c.back }))
+  );
+  btn.disabled = false;
+  btn.textContent = 'Importer toutes les cartes';
+  if (error) { showMsg('md-import-msg', 'Erreur : ' + error.message, true); return; }
+  showMsg('md-import-msg', `${parsedMdCards.length} carte(s) importée(s) avec succès !`);
+  document.getElementById('md-preview').classList.add('hidden');
+  document.getElementById('md-import-text').value = '';
+  document.getElementById('md-file').value = '';
+  parsedMdCards = [];
+  await loadCards();
+});
