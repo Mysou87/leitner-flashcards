@@ -95,7 +95,7 @@ async function loadDecksView() {
 
   const [decksRes, progressRes, cardsRes] = await Promise.all([
     db.from('decks').select('*').eq('is_active', true),
-    db.from('progress').select('card_id, box_level, next_review').eq('student_id', student.id),
+    db.from('progress').select('card_id, box_level, next_review, first_seen').eq('student_id', student.id),
     db.from('cards').select('id, deck_id').eq('is_active', true),
   ]);
 
@@ -110,14 +110,31 @@ function renderDecks() {
   const todayStr = today();
   const progressMap = Object.fromEntries(allProgress.map(p => [p.card_id, p]));
 
-  // Calculer les cartes dues par paquet
+  // Compter les nouvelles cartes déjà vues aujourd'hui par paquet
+  const newSeenTodayByDeck = {};
+  allProgress.forEach(p => {
+    if (p.first_seen === todayStr) {
+      const card = allCardIds.find(c => c.id === p.card_id);
+      if (card) newSeenTodayByDeck[card.deck_id] = (newSeenTodayByDeck[card.deck_id] || 0) + 1;
+    }
+  });
+
+  // Calculer les cartes dues par paquet (avec limite journalière pour les nouvelles)
   const stats = {};
-  allDecks.forEach(d => { stats[d.id] = { due: 0, total: 0 }; });
+  allDecks.forEach(d => { stats[d.id] = { due: 0, new_total: 0 }; });
   allCardIds.forEach(c => {
     if (!stats[c.deck_id]) return;
-    stats[c.deck_id].total++;
     const p = progressMap[c.id];
-    if (!p || p.next_review <= todayStr) stats[c.deck_id].due++;
+    if (!p) {
+      stats[c.deck_id].new_total++;
+    } else if (p.next_review <= todayStr) {
+      stats[c.deck_id].due++;
+    }
+  });
+  allDecks.forEach(d => {
+    const s = stats[d.id];
+    const newSeenToday = newSeenTodayByDeck[d.id] || 0;
+    s.effective = s.due + Math.min(Math.max(0, MAX_NEW_CARDS_PER_DAY - newSeenToday), s.new_total);
   });
 
   // Trier : année de l'élève en premier, puis alphabétique
@@ -164,8 +181,8 @@ function renderDecks() {
           <h3>${deck.name}</h3>
           <div class="deck-meta">${deck.subject}${deck.teacher ? ' · ' + deck.teacher : ''}</div>
         </div>
-        <div class="due-badge ${s.due === 0 ? 'up-to-date' : ''}">
-          ${s.due === 0 ? '✓ À jour' : `${s.due} carte${s.due > 1 ? 's' : ''}`}
+        <div class="due-badge ${s.effective === 0 ? 'up-to-date' : ''}">
+          ${s.effective === 0 ? '✓ À jour' : `${s.effective} carte${s.effective > 1 ? 's' : ''}`}
         </div>`;
       card.addEventListener('click', () => startSession(deck));
       section.appendChild(card);
@@ -188,17 +205,26 @@ async function startSession(deck) {
     .eq('deck_id', deck.id)
     .eq('is_active', true);
 
-  // Filtrer : dues aujourd'hui ou jamais vues
-  sessionCards = (cards || []).filter(c => {
+  // Cartes déjà vues et dues aujourd'hui
+  const dueCards = (cards || []).filter(c => {
     const p = progressMap[c.id];
-    return !p || p.next_review <= todayStr;
+    return p && p.next_review <= todayStr;
   });
 
-  // Mélanger
-  sessionCards.sort(() => Math.random() - 0.5);
+  // Nouvelles cartes (jamais vues), limitées à MAX_NEW_CARDS_PER_DAY par jour
+  const newCards = (cards || []).filter(c => !progressMap[c.id]);
+  const deckCardIds = new Set((cards || []).map(c => c.id));
+  const newSeenToday = allProgress.filter(p =>
+    p.first_seen === todayStr && deckCardIds.has(p.card_id)
+  ).length;
+  const remaining = Math.max(0, MAX_NEW_CARDS_PER_DAY - newSeenToday);
+  const selectedNew = newCards.sort(() => Math.random() - 0.5).slice(0, remaining);
+
+  sessionCards = [...dueCards, ...selectedNew].sort(() => Math.random() - 0.5);
 
   if (sessionCards.length === 0) {
-    showEndView(0, 0, true);
+    const limitReached = newCards.length > 0 && remaining === 0;
+    showEndView(0, 0, true, limitReached);
     return;
   }
 
@@ -281,7 +307,7 @@ async function recordAnswer(correct) {
     existing.box_level = newBox;
     existing.next_review = nextReview;
   } else {
-    allProgress.push({ card_id: card.id, box_level: newBox, next_review: nextReview });
+    allProgress.push({ card_id: card.id, box_level: newBox, next_review: nextReview, first_seen: today() });
   }
 
   if (correct) {
@@ -317,7 +343,7 @@ async function saveSession() {
 }
 
 // ── Vue : fin de session ──────────────────────────────────────
-function showEndView(correct, wrong, upToDate) {
+function showEndView(correct, wrong, upToDate, limitReached = false) {
   const total = correct + wrong;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
 
@@ -325,17 +351,31 @@ function showEndView(correct, wrong, upToDate) {
   let title = 'Session terminée !';
 
   if (upToDate) {
-    emoji = '🎯';
-    title = 'Tout est à jour !';
-    document.getElementById('end-stats').innerHTML = `
-      <div class="stat-row">
-        <span class="stat-label">Ce paquet</span>
-        <span class="stat-value">Aucune carte à réviser aujourd'hui</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Prochaine révision</span>
-        <span class="stat-value">Reviens demain 👍</span>
-      </div>`;
+    if (limitReached) {
+      emoji = '⏰';
+      title = 'Limite journalière atteinte';
+      document.getElementById('end-stats').innerHTML = `
+        <div class="stat-row">
+          <span class="stat-label">Nouvelles cartes aujourd'hui</span>
+          <span class="stat-value">${MAX_NEW_CARDS_PER_DAY} / ${MAX_NEW_CARDS_PER_DAY}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Prochaine série</span>
+          <span class="stat-value">Reviens demain pour 5 nouvelles cartes 📅</span>
+        </div>`;
+    } else {
+      emoji = '🎯';
+      title = 'Tout est à jour !';
+      document.getElementById('end-stats').innerHTML = `
+        <div class="stat-row">
+          <span class="stat-label">Ce paquet</span>
+          <span class="stat-value">Aucune carte à réviser aujourd'hui</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Prochaine révision</span>
+          <span class="stat-value">Reviens demain 👍</span>
+        </div>`;
+    }
   } else {
     if (pct === 100) emoji = '🎉';
     else if (pct >= 80) emoji = '😄';
