@@ -203,6 +203,14 @@
             <span style="font-size:0.85rem;color:var(--text-light)">ou importer un fichier :</span>
             <input type="file" id="md-file" accept=".md,.txt" style="font-size:0.85rem">
           </div>
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+            <p style="font-size:0.85rem;font-weight:600;margin-bottom:6px">Import depuis Excel</p>
+            <p style="font-size:0.85rem;color:var(--text-light);margin-bottom:10px">
+              Colonne A = question (recto) · Colonne B = réponse (verso)<br>
+              La 1ère ligne est ignorée si elle ressemble à un en-tête.
+            </p>
+            <input type="file" id="excel-file" accept=".xlsx,.xls,.ods,.csv" style="font-size:0.85rem">
+          </div>
           <div id="md-preview" class="hidden" style="margin-top:16px">
             <p id="md-preview-count" style="font-size:0.88rem;font-weight:600;margin-bottom:10px"></p>
             <div id="md-preview-list" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.84rem"></div>
@@ -236,6 +244,7 @@
   </div><!-- /admin-panel -->
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/admin.js"></script>
 </body>

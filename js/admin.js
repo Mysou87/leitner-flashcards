@@ -509,6 +509,51 @@ document.getElementById('md-file').addEventListener('change', (e) => {
   reader.readAsText(file, 'UTF-8');
 });
 
+document.getElementById('excel-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+    // Ignorer les lignes vides
+    const validRows = rows.filter(r => r[0] && r[1]);
+    if (validRows.length === 0) {
+      alert('Aucune donnée trouvée. Vérifie que la colonne A contient les questions et la colonne B les réponses.');
+      return;
+    }
+
+    // Ignorer la première ligne si elle ressemble à un en-tête
+    const headerWords = ['question', 'recto', 'front', 'terme', 'verso', 'back', 'réponse', 'reponse'];
+    const firstCell = String(validRows[0][0]).toLowerCase();
+    const hasHeader = headerWords.some(w => firstCell.includes(w));
+    const dataRows = hasHeader ? validRows.slice(1) : validRows;
+
+    const cards = dataRows.map(r => ({
+      front: String(r[0]).trim(),
+      back: String(r[1]).trim(),
+    })).filter(c => c.front && c.back);
+
+    if (cards.length === 0) {
+      alert('Aucune carte valide trouvée après suppression de l\'en-tête.');
+      return;
+    }
+
+    parsedMdCards = cards;
+    document.getElementById('md-preview-count').textContent =
+      `${cards.length} carte(s) détectée(s) depuis Excel — aperçu :`;
+    document.getElementById('md-preview-list').innerHTML = cards.map((c, i) => `
+      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <strong>Q${i + 1} :</strong> ${c.front}<br>
+        <span style="color:var(--text-light)">R : ${c.back.length > 100 ? c.back.slice(0, 100) + '…' : c.back}</span>
+      </div>`).join('');
+    document.getElementById('md-preview').classList.remove('hidden');
+  };
+  reader.readAsArrayBuffer(file);
+});
+
 document.getElementById('btn-confirm-md-import').addEventListener('click', async () => {
   if (!currentDeckId || parsedMdCards.length === 0) return;
   const btn = document.getElementById('btn-confirm-md-import');
