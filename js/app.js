@@ -1,8 +1,9 @@
 // ── État global ───────────────────────────────────────────────
 let student = null;
 let allDecks = [];
-let allProgress = [];   // { card_id, box_level, next_review }
-let allCardIds = [];    // { id, deck_id }
+let allProgress = [];        // { card_id, box_level, next_review }
+let allCardIds = [];         // { id, deck_id }
+let allSessionsStudent = []; // { reviewed_at, deck_id, cards_reviewed, cards_correct }
 
 let currentDeck = null;
 let sessionCards = [];
@@ -93,55 +94,26 @@ async function loadDecksView() {
   showView('view-decks');
   document.getElementById('decks-list').innerHTML = '<div class="spinner">Chargement…</div>';
 
-  const [decksRes, progressRes, cardsRes] = await Promise.all([
+  const [decksRes, progressRes, cardsRes, sessionsRes] = await Promise.all([
     db.from('decks').select('*').eq('is_active', true),
     db.from('progress').select('card_id, box_level, next_review, first_seen').eq('student_id', student.id),
     db.from('cards').select('id, deck_id').eq('is_active', true),
+    db.from('review_sessions').select('reviewed_at, deck_id, cards_reviewed, cards_correct').eq('student_id', student.id),
   ]);
 
   allDecks = decksRes.data || [];
   allProgress = progressRes.data || [];
   allCardIds = cardsRes.data || [];
+  allSessionsStudent = sessionsRes.data || [];
 
-  await renderStreak();
+  renderStreak();
   renderProgressOverview();
+  renderBadges();
   renderDecks();
 }
 
-async function renderStreak() {
-  const { data: sessions } = await db
-    .from('review_sessions')
-    .select('reviewed_at')
-    .eq('student_id', student.id)
-    .order('reviewed_at', { ascending: false });
-
-  if (!sessions || sessions.length === 0) {
-    document.getElementById('topbar-streak').textContent = '';
-    return;
-  }
-
-  // Compter les jours consécutifs jusqu'à aujourd'hui (ou hier)
-  const reviewedDays = new Set(sessions.map(s => s.reviewed_at.split('T')[0]));
-  const todayStr = today();
-  let streak = 0;
-  const d = new Date();
-
-  // Accepter si la dernière révision était aujourd'hui ou hier
-  const lastDay = sessions[0].reviewed_at.split('T')[0];
-  if (lastDay !== todayStr) {
-    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-    if (lastDay !== yesterday.toISOString().split('T')[0]) {
-      document.getElementById('topbar-streak').textContent = '';
-      return;
-    }
-    d.setDate(d.getDate() - 1);
-  }
-
-  while (reviewedDays.has(d.toISOString().split('T')[0])) {
-    streak++;
-    d.setDate(d.getDate() - 1);
-  }
-
+function renderStreak() {
+  const streak = computeStreak(allSessionsStudent);
   document.getElementById('topbar-streak').textContent = streak >= 2 ? `🔥 ${streak}j` : '';
 }
 
@@ -168,6 +140,19 @@ function renderProgressOverview() {
 
   document.getElementById('boxes-legend').innerHTML = counts.slice(1).map((n, i) =>
     `<div style="flex:1;text-align:center">${i + 1}</div>`
+  ).join('');
+}
+
+function renderBadges() {
+  const section = document.getElementById('badges-section');
+  if (allProgress.length === 0) { section.classList.add('hidden'); return; }
+  const data = computeBadgeData(allProgress, allSessionsStudent, allCardIds);
+  section.classList.remove('hidden');
+  document.getElementById('badges-list').innerHTML = BADGE_DEFS.map(b =>
+    `<div class="reward-badge ${b.check(data) ? 'unlocked' : 'locked'}" title="${b.name}">
+      <div class="rb-icon">${b.icon}</div>
+      <div class="rb-name">${b.name}</div>
+    </div>`
   ).join('');
 }
 

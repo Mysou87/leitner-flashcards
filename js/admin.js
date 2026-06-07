@@ -95,10 +95,11 @@ async function loadDashboard() {
 
   // Progression par élève
   const progEl = document.getElementById('dash-progress');
-  const [{ data: allStudents }, { data: allProgress }, { data: allSessions }] = await Promise.all([
+  const [{ data: allStudents }, { data: allProgress }, { data: allSessions }, { data: allCardIds }] = await Promise.all([
     db.from('students').select('id, first_name, last_name, year_level').eq('is_active', true).order('last_name'),
-    db.from('progress').select('student_id, box_level'),
-    db.from('review_sessions').select('student_id, reviewed_at'),
+    db.from('progress').select('student_id, card_id, box_level'),
+    db.from('review_sessions').select('student_id, reviewed_at, deck_id, cards_reviewed, cards_correct'),
+    db.from('cards').select('id, deck_id').eq('is_active', true),
   ]);
 
   const studentMap = {};
@@ -110,9 +111,18 @@ async function loadDashboard() {
     }
   });
 
+  const progressByStudent = {};
+  (allProgress || []).forEach(p => {
+    if (!progressByStudent[p.student_id]) progressByStudent[p.student_id] = [];
+    progressByStudent[p.student_id].push(p);
+  });
+
+  const sessionsByStudent = {};
   const daysByStudent = {};
   const lastSession = {};
   (allSessions || []).forEach(s => {
+    if (!sessionsByStudent[s.student_id]) sessionsByStudent[s.student_id] = [];
+    sessionsByStudent[s.student_id].push(s);
     const day = s.reviewed_at.split('T')[0];
     if (!daysByStudent[s.student_id]) daysByStudent[s.student_id] = new Set();
     daysByStudent[s.student_id].add(day);
@@ -128,6 +138,10 @@ async function loadDashboard() {
     const last = lastSession[s.id]
       ? new Date(lastSession[s.id]).toLocaleDateString('fr-BE')
       : '—';
+    const badgeData = computeBadgeData(progressByStudent[s.id] || [], sessionsByStudent[s.id] || [], allCardIds || []);
+    const unlocked = BADGE_DEFS.filter(b => b.check(badgeData));
+    const badgeIcons = unlocked.map(b => b.icon).join('');
+    const badgeTitle = unlocked.map(b => b.icon + ' ' + b.name).join(' · ');
     return `<tr>
       <td>${s.last_name} ${s.first_name}</td>
       <td><span class="badge badge-blue">${s.year_level}</span></td>
@@ -135,12 +149,13 @@ async function loadDashboard() {
       <td>${mastered}</td>
       <td>${days}</td>
       <td>${last}</td>
+      <td style="font-size:1.1rem;letter-spacing:1px;min-width:80px" title="${badgeTitle}">${badgeIcons || '—'}</td>
     </tr>`;
   }).join('');
 
   progEl.innerHTML = `<div style="overflow-x:auto"><table>
-    <thead><tr><th>Élève</th><th>Année</th><th>Cartes vues</th><th>Maîtrisées (7+)</th><th>Jours de connexion</th><th>Dernière révision</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="6" style="color:var(--text-light)">Aucun élève.</td></tr>'}</tbody>
+    <thead><tr><th>Élève</th><th>Année</th><th>Cartes vues</th><th>Maîtrisées (7+)</th><th>Jours</th><th>Dernière révision</th><th>Badges</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7" style="color:var(--text-light)">Aucun élève.</td></tr>'}</tbody>
   </table></div>`;
 }
 
