@@ -32,6 +32,16 @@ function md(text) {
   return marked.parse(text || '');
 }
 
+function renderMath(el) {
+  renderMathInElement(el, {
+    delimiters: [
+      { left: '$$', right: '$$', display: true },
+      { left: '$', right: '$', display: false },
+    ],
+    throwOnError: false,
+  });
+}
+
 // ── Connexion ─────────────────────────────────────────────────
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -215,9 +225,13 @@ function renderCard() {
   // Indicateur de boîte
   document.getElementById('box-chip').textContent = `Boîte ${currentBox} / 8`;
 
-  // Contenu de la carte (recto)
-  document.getElementById('card-front').innerHTML = md(card.front);
-  document.getElementById('card-back').innerHTML = md(card.back);
+  // Contenu de la carte (recto + verso avec rendu LaTeX)
+  const frontEl = document.getElementById('card-front');
+  const backEl = document.getElementById('card-back');
+  frontEl.innerHTML = md(card.front);
+  backEl.innerHTML = md(card.back);
+  renderMath(frontEl);
+  renderMath(backEl);
 
   // Remettre en état "question seulement"
   document.getElementById('card-divider').classList.add('hidden');
