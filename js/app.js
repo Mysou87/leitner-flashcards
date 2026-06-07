@@ -9,6 +9,7 @@ let sessionCards = [];
 let sessionIndex = 0;
 let sessionCorrect = 0;
 let sessionWrong = 0;
+const retriedCards = new Set(); // cartes déjà repassées dans la session
 
 // ── Utilitaires ───────────────────────────────────────────────
 function showView(id) {
@@ -194,6 +195,7 @@ async function startSession(deck) {
   sessionIndex = 0;
   sessionCorrect = 0;
   sessionWrong = 0;
+  retriedCards.clear();
 
   showView('view-review');
   renderCard();
@@ -268,7 +270,16 @@ async function recordAnswer(correct) {
     allProgress.push({ card_id: card.id, box_level: newBox, next_review: nextReview });
   }
 
-  if (correct) sessionCorrect++; else sessionWrong++;
+  if (correct) {
+    sessionCorrect++;
+  } else {
+    sessionWrong++;
+    // Repasser la carte en fin de session si pas encore repassée
+    if (!retriedCards.has(card.id)) {
+      retriedCards.add(card.id);
+      sessionCards.push(card);
+    }
+  }
 
   document.getElementById('btn-correct').disabled = false;
   document.getElementById('btn-wrong').disabled = false;
