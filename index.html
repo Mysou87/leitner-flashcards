@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Flashcards</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0EA5E9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Flashcards">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 </head>
@@ -28,9 +32,15 @@
   <div id="view-decks" class="view">
     <div class="top-bar">
       <span class="top-bar-name" id="topbar-name"></span>
+      <span id="topbar-streak" style="font-size:0.9rem;font-weight:700;color:#F97316"></span>
       <button class="btn-ghost" id="btn-logout">Changer d'élève</button>
     </div>
     <div class="container">
+      <div id="progress-overview" class="hidden" style="background:white;border-radius:14px;padding:16px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Ma progression globale</div>
+        <div id="boxes-chart" style="display:flex;align-items:flex-end;gap:4px;height:48px;margin-bottom:6px"></div>
+        <div id="boxes-legend" style="display:flex;gap:4px;font-size:0.72rem;color:var(--text-light)"></div>
+      </div>
       <h2>Choisir un paquet</h2>
       <div id="decks-list"><div class="spinner">Chargement…</div></div>
     </div>

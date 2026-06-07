@@ -43,7 +43,10 @@
           <div id="dash-activity"><div class="spinner">Chargement…</div></div>
         </div>
         <div class="panel">
-          <h3>Progression par élève</h3>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+            <h3>Progression par élève</h3>
+            <button class="btn-secondary" id="btn-export-excel" style="width:auto">⬇ Exporter en Excel</button>
+          </div>
           <div id="dash-progress"><div class="spinner">Chargement…</div></div>
         </div>
       </div>
@@ -242,6 +245,26 @@
 
     </div><!-- /admin-content -->
   </div><!-- /admin-panel -->
+
+  <!-- Modal d'édition de carte -->
+  <div id="modal-edit-card" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:none;align-items:center;justify-content:center;padding:16px">
+    <div style="background:white;border-radius:14px;padding:24px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto">
+      <h3 style="margin-bottom:16px">Modifier la carte</h3>
+      <div style="margin-bottom:12px">
+        <label>Question (recto)</label>
+        <textarea id="edit-card-front" style="min-height:100px"></textarea>
+      </div>
+      <div style="margin-bottom:16px">
+        <label>Réponse (verso)</label>
+        <textarea id="edit-card-back" style="min-height:100px"></textarea>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn-primary" id="btn-save-card-edit" style="flex:1">Enregistrer</button>
+        <button class="btn-secondary" id="btn-cancel-card-edit" style="flex:1">Annuler</button>
+      </div>
+      <p id="edit-card-msg" class="hidden" style="margin-top:8px"></p>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>

@@ -366,6 +366,7 @@ async function toggleDeck(id, isActive) {
 
 // ── CARTES ────────────────────────────────────────────────────
 let currentDeckId = null;
+const cardData = {}; // stocke front/back des cartes pour éviter les problèmes d'échappement
 
 function openCards(deckId, deckName) {
   currentDeckId = deckId;
@@ -404,6 +405,7 @@ async function loadCards() {
     return;
   }
 
+  cards.forEach(c => { cardData[c.id] = { front: c.front, back: c.back }; });
   tbody.innerHTML = cards.map(c => `
     <tr style="${!c.is_active ? 'opacity:0.5' : ''}">
       <td style="font-size:0.85rem">${truncate(c.front)}</td>
@@ -411,7 +413,7 @@ async function loadCards() {
       <td><span class="badge ${c.is_active ? 'badge-green' : 'badge-gray'}">${c.is_active ? 'Active' : 'Inactive'}</span></td>
       <td style="white-space:nowrap;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn-sm" style="background:var(--primary);color:white"
-          onclick="editCard('${c.id}', ${JSON.stringify(c.front).replace(/'/g, "\\'")}, ${JSON.stringify(c.back).replace(/'/g, "\\'")})">Modifier</button>
+          onclick="editCard('${c.id}', cardData['${c.id}'].front, cardData['${c.id}'].back)">Modifier</button>
         <button class="btn-sm" style="background:${c.is_active ? '#F1F5F9' : 'var(--success)'};color:${c.is_active ? 'var(--text)' : 'white'}"
           onclick="toggleCard('${c.id}', ${c.is_active})">${c.is_active ? 'Désactiver' : 'Réactiver'}</button>
         <button class="btn-sm" style="background:var(--danger);color:white"
@@ -431,14 +433,47 @@ document.getElementById('form-add-card').addEventListener('submit', async (e) =>
   await loadCards();
 });
 
-async function editCard(id, currentFront, currentBack) {
-  const front = prompt('Question (recto) :', currentFront);
-  if (front === null) return;
-  const back = prompt('Réponse (verso) :', currentBack);
-  if (back === null) return;
-  await db.from('cards').update({ front: front.trim(), back: back.trim() }).eq('id', id);
-  await loadCards();
+let editingCardId = null;
+
+function editCard(id, currentFront, currentBack) {
+  editingCardId = id;
+  document.getElementById('edit-card-front').value = currentFront;
+  document.getElementById('edit-card-back').value = currentBack;
+  document.getElementById('edit-card-msg').classList.add('hidden');
+  document.getElementById('modal-edit-card').classList.remove('hidden');
 }
+
+document.getElementById('btn-cancel-card-edit').addEventListener('click', () => {
+  document.getElementById('modal-edit-card').classList.add('hidden');
+  editingCardId = null;
+});
+
+document.getElementById('btn-save-card-edit').addEventListener('click', async () => {
+  const front = document.getElementById('edit-card-front').value.trim();
+  const back = document.getElementById('edit-card-back').value.trim();
+  if (!front || !back) {
+    showMsg('edit-card-msg', 'Les deux champs sont obligatoires.', true);
+    return;
+  }
+  const btn = document.getElementById('btn-save-card-edit');
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+  const { error } = await db.from('cards').update({ front, back }).eq('id', editingCardId);
+  btn.disabled = false;
+  btn.textContent = 'Enregistrer';
+  if (error) { showMsg('edit-card-msg', 'Erreur : ' + error.message, true); return; }
+  document.getElementById('modal-edit-card').classList.add('hidden');
+  editingCardId = null;
+  await loadCards();
+});
+
+// Fermer le modal en cliquant en dehors
+document.getElementById('modal-edit-card').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    document.getElementById('modal-edit-card').classList.add('hidden');
+    editingCardId = null;
+  }
+});
 
 async function toggleCard(id, isActive) {
   await db.from('cards').update({ is_active: !isActive }).eq('id', id);
@@ -462,6 +497,61 @@ document.getElementById('btn-clear-deck').addEventListener('click', async () => 
   await db.from('progress').delete().in('card_id', ids);
   await db.from('cards').delete().in('id', ids);
   await loadCards();
+});
+
+// ── Export Excel ─────────────────────────────────────────────
+document.getElementById('btn-export-excel').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-export-excel');
+  btn.textContent = 'Export en cours…';
+  btn.disabled = true;
+
+  const [studentsRes, sessionsRes, progressRes] = await Promise.all([
+    db.from('students').select('*').eq('is_active', true).order('last_name'),
+    db.from('review_sessions').select('student_id, reviewed_at, cards_reviewed, cards_correct'),
+    db.from('progress').select('student_id, box_level'),
+  ]);
+
+  const students = studentsRes.data || [];
+  const sessions = sessionsRes.data || [];
+  const progress = progressRes.data || [];
+
+  // Agréger par élève
+  const sessionsByStudent = {};
+  sessions.forEach(s => {
+    if (!sessionsByStudent[s.student_id]) sessionsByStudent[s.student_id] = [];
+    sessionsByStudent[s.student_id].push(s);
+  });
+
+  const progressByStudent = {};
+  progress.forEach(p => {
+    if (!progressByStudent[p.student_id]) progressByStudent[p.student_id] = [];
+    progressByStudent[p.student_id].push(p.box_level);
+  });
+
+  const rows = [['Nom', 'Prénom', 'Année', 'Sessions totales', 'Dernière révision', 'Cartes vues', 'Cartes maîtrisées (boîte 7+)', 'Score moyen (%)']];
+
+  students.forEach(s => {
+    const sSessions = sessionsByStudent[s.id] || [];
+    const sProgress = progressByStudent[s.id] || [];
+    const lastSession = sSessions.length > 0
+      ? new Date(sSessions.sort((a, b) => b.reviewed_at.localeCompare(a.reviewed_at))[0].reviewed_at).toLocaleDateString('fr-BE')
+      : '—';
+    const totalReviewed = sSessions.reduce((acc, s) => acc + s.cards_reviewed, 0);
+    const totalCorrect = sSessions.reduce((acc, s) => acc + s.cards_correct, 0);
+    const avgScore = totalReviewed > 0 ? Math.round(totalCorrect / totalReviewed * 100) : 0;
+    const mastered = sProgress.filter(b => b >= 7).length;
+
+    rows.push([s.last_name, s.first_name, s.year_level, sSessions.length, lastSession, sProgress.length, mastered, avgScore]);
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [14, 14, 6, 8, 14, 10, 16, 10].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Progression');
+  XLSX.writeFile(wb, `flashcards_progression_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+  btn.textContent = '⬇ Exporter en Excel';
+  btn.disabled = false;
 });
 
 // ── Import Markdown ───────────────────────────────────────────

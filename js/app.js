@@ -103,7 +103,67 @@ async function loadDecksView() {
   allProgress = progressRes.data || [];
   allCardIds = cardsRes.data || [];
 
+  await renderStreak();
+  renderProgressOverview();
   renderDecks();
+}
+
+async function renderStreak() {
+  const { data: sessions } = await db
+    .from('review_sessions')
+    .select('reviewed_at')
+    .eq('student_id', student.id)
+    .order('reviewed_at', { ascending: false });
+
+  if (!sessions || sessions.length === 0) {
+    document.getElementById('topbar-streak').textContent = '';
+    return;
+  }
+
+  // Compter les jours consécutifs jusqu'à aujourd'hui (ou hier)
+  const reviewedDays = new Set(sessions.map(s => s.reviewed_at.split('T')[0]));
+  const todayStr = today();
+  let streak = 0;
+  const d = new Date();
+
+  // Accepter si la dernière révision était aujourd'hui ou hier
+  const lastDay = sessions[0].reviewed_at.split('T')[0];
+  if (lastDay !== todayStr) {
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    if (lastDay !== yesterday.toISOString().split('T')[0]) {
+      document.getElementById('topbar-streak').textContent = '';
+      return;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+
+  while (reviewedDays.has(d.toISOString().split('T')[0])) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+
+  document.getElementById('topbar-streak').textContent = streak >= 2 ? `🔥 ${streak}j` : '';
+}
+
+function renderProgressOverview() {
+  const counts = Array(9).fill(0); // index 1-8
+  allProgress.forEach(p => { if (p.box_level >= 1 && p.box_level <= 8) counts[p.box_level]++; });
+  const total = counts.reduce((a, b) => a + b, 0);
+  if (total === 0) return;
+
+  document.getElementById('progress-overview').classList.remove('hidden');
+  const colors = ['','#EF4444','#F97316','#EAB308','#84CC16','#22C55E','#14B8A6','#0EA5E9','#8B5CF6'];
+  const max = Math.max(...counts.slice(1));
+
+  document.getElementById('boxes-chart').innerHTML = counts.slice(1).map((n, i) => {
+    const box = i + 1;
+    const h = max > 0 ? Math.max(4, Math.round((n / max) * 48)) : 4;
+    return `<div title="Boîte ${box} : ${n} carte${n > 1 ? 's' : ''}" style="flex:1;height:${h}px;background:${colors[box]};border-radius:3px 3px 0 0;cursor:default"></div>`;
+  }).join('');
+
+  document.getElementById('boxes-legend').innerHTML = counts.slice(1).map((n, i) =>
+    `<div style="flex:1;text-align:center">${i + 1}</div>`
+  ).join('') + `<div style="margin-left:8px;color:var(--text-light);font-size:0.72rem;align-self:center">${total} carte${total > 1 ? 's' : ''} en cours</div>`;
 }
 
 function renderDecks() {
@@ -343,6 +403,17 @@ async function saveSession() {
 }
 
 // ── Vue : fin de session ──────────────────────────────────────
+function nextReviewDate() {
+  const deckCardIds = new Set(sessionCards.map(c => c.id));
+  const progressMap = Object.fromEntries(allProgress.map(p => [p.card_id, p]));
+  const dates = allProgress
+    .filter(p => p.next_review && p.next_review > today())
+    .map(p => p.next_review)
+    .sort();
+  if (dates.length === 0) return null;
+  return new Date(dates[0]).toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
 function showEndView(correct, wrong, upToDate, limitReached = false) {
   const total = correct + wrong;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
@@ -397,7 +468,8 @@ function showEndView(correct, wrong, upToDate, limitReached = false) {
       <div class="stat-row">
         <span class="stat-label">Score</span>
         <span class="stat-value">${pct} %</span>
-      </div>`;
+      </div>
+      ${(() => { const d = nextReviewDate(); return d ? `<div class="stat-row"><span class="stat-label">Prochaine révision</span><span class="stat-value">${d}</span></div>` : ''; })()}`;
   }
 
   document.getElementById('end-emoji').textContent = emoji;

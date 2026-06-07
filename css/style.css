@@ -487,6 +487,8 @@ tr:hover td { background: #F8FAFC; }
 .form-row { display: flex; gap: 10px; }
 .form-row > * { flex: 1; }
 
+#modal-edit-card:not(.hidden) { display: flex !important; }
+
 .admin-login-wrap {
   display: flex;
   align-items: center;
