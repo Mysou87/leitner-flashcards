@@ -155,15 +155,20 @@ function renderProgressOverview() {
   const colors = ['','#EF4444','#F97316','#EAB308','#84CC16','#22C55E','#14B8A6','#0EA5E9','#8B5CF6'];
   const max = Math.max(...counts.slice(1));
 
-  document.getElementById('boxes-chart').innerHTML = counts.slice(1).map((n, i) => {
+  const chartEl = document.getElementById('boxes-chart');
+  chartEl.style.height = 'auto';
+  chartEl.innerHTML = counts.slice(1).map((n, i) => {
     const box = i + 1;
-    const h = max > 0 ? Math.max(4, Math.round((n / max) * 48)) : 4;
-    return `<div title="Boîte ${box} : ${n} carte${n > 1 ? 's' : ''}" style="flex:1;height:${h}px;background:${colors[box]};border-radius:3px 3px 0 0;cursor:default"></div>`;
+    const h = max > 0 ? Math.max(4, Math.round((n / max) * 44)) : 4;
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">` +
+      `<div style="font-size:0.65rem;font-weight:700;color:var(--text-light);line-height:1;visibility:${n > 0 ? 'visible' : 'hidden'}">${n}</div>` +
+      `<div title="Boîte ${box} : ${n} carte${n !== 1 ? 's' : ''}" style="width:100%;height:${h}px;background:${colors[box]};border-radius:3px 3px 0 0"></div>` +
+      `</div>`;
   }).join('');
 
   document.getElementById('boxes-legend').innerHTML = counts.slice(1).map((n, i) =>
     `<div style="flex:1;text-align:center">${i + 1}</div>`
-  ).join('') + `<div style="margin-left:8px;color:var(--text-light);font-size:0.72rem;align-self:center">${total} carte${total > 1 ? 's' : ''} en cours</div>`;
+  ).join('');
 }
 
 function renderDecks() {
