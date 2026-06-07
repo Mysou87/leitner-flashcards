@@ -95,13 +95,11 @@ async function loadDashboard() {
 
   // Progression par élève
   const progEl = document.getElementById('dash-progress');
-  const { data: allStudents } = await db
-    .from('students')
-    .select('id, first_name, last_name, year_level')
-    .eq('is_active', true)
-    .order('last_name');
-
-  const { data: allProgress } = await db.from('progress').select('student_id, box_level');
+  const [{ data: allStudents }, { data: allProgress }, { data: allSessions }] = await Promise.all([
+    db.from('students').select('id, first_name, last_name, year_level').eq('is_active', true).order('last_name'),
+    db.from('progress').select('student_id, box_level'),
+    db.from('review_sessions').select('student_id, reviewed_at'),
+  ]);
 
   const studentMap = {};
   (allStudents || []).forEach(s => { studentMap[s.id] = { ...s, boxes: {} }; });
@@ -112,15 +110,21 @@ async function loadDashboard() {
     }
   });
 
+  const daysByStudent = {};
   const lastSession = {};
-  sessions.forEach(s => {
-    if (!lastSession[s.student_id]) lastSession[s.student_id] = s.reviewed_at;
+  (allSessions || []).forEach(s => {
+    const day = s.reviewed_at.split('T')[0];
+    if (!daysByStudent[s.student_id]) daysByStudent[s.student_id] = new Set();
+    daysByStudent[s.student_id].add(day);
+    if (!lastSession[s.student_id] || s.reviewed_at > lastSession[s.student_id])
+      lastSession[s.student_id] = s.reviewed_at;
   });
 
   const rows = (allStudents || []).map(s => {
     const d = studentMap[s.id];
     const total = Object.values(d.boxes).reduce((a, b) => a + b, 0);
     const mastered = (d.boxes[7] || 0) + (d.boxes[8] || 0);
+    const days = daysByStudent[s.id] ? daysByStudent[s.id].size : 0;
     const last = lastSession[s.id]
       ? new Date(lastSession[s.id]).toLocaleDateString('fr-BE')
       : '—';
@@ -129,13 +133,14 @@ async function loadDashboard() {
       <td><span class="badge badge-blue">${s.year_level}</span></td>
       <td>${total}</td>
       <td>${mastered}</td>
+      <td>${days}</td>
       <td>${last}</td>
     </tr>`;
   }).join('');
 
   progEl.innerHTML = `<div style="overflow-x:auto"><table>
-    <thead><tr><th>Élève</th><th>Année</th><th>Cartes vues</th><th>Maîtrisées (7+)</th><th>Dernière révision</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="5" style="color:var(--text-light)">Aucun élève.</td></tr>'}</tbody>
+    <thead><tr><th>Élève</th><th>Année</th><th>Cartes vues</th><th>Maîtrisées (7+)</th><th>Jours de connexion</th><th>Dernière révision</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" style="color:var(--text-light)">Aucun élève.</td></tr>'}</tbody>
   </table></div>`;
 }
 
