@@ -409,11 +409,13 @@ async function loadCards() {
       <td style="font-size:0.85rem">${truncate(c.front)}</td>
       <td style="font-size:0.85rem">${truncate(c.back)}</td>
       <td><span class="badge ${c.is_active ? 'badge-green' : 'badge-gray'}">${c.is_active ? 'Active' : 'Inactive'}</span></td>
-      <td style="white-space:nowrap;display:flex;gap:6px">
+      <td style="white-space:nowrap;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn-sm" style="background:var(--primary);color:white"
           onclick="editCard('${c.id}', ${JSON.stringify(c.front).replace(/'/g, "\\'")}, ${JSON.stringify(c.back).replace(/'/g, "\\'")})">Modifier</button>
         <button class="btn-sm" style="background:${c.is_active ? '#F1F5F9' : 'var(--success)'};color:${c.is_active ? 'var(--text)' : 'white'}"
           onclick="toggleCard('${c.id}', ${c.is_active})">${c.is_active ? 'Désactiver' : 'Réactiver'}</button>
+        <button class="btn-sm" style="background:var(--danger);color:white"
+          onclick="deleteCard('${c.id}')">Supprimer</button>
       </td>
     </tr>`).join('');
 }
@@ -442,6 +444,25 @@ async function toggleCard(id, isActive) {
   await db.from('cards').update({ is_active: !isActive }).eq('id', id);
   await loadCards();
 }
+
+async function deleteCard(id) {
+  if (!confirm('Supprimer cette carte définitivement ? La progression des élèves sur cette carte sera aussi effacée.')) return;
+  await db.from('progress').delete().eq('card_id', id);
+  const { error } = await db.from('cards').delete().eq('id', id);
+  if (error) { alert('Erreur : ' + error.message); return; }
+  await loadCards();
+}
+
+document.getElementById('btn-clear-deck').addEventListener('click', async () => {
+  if (!currentDeckId) return;
+  if (!confirm('Supprimer TOUTES les cartes de ce paquet ? Cette action est irréversible.')) return;
+  const { data: cards } = await db.from('cards').select('id').eq('deck_id', currentDeckId);
+  if (!cards || cards.length === 0) return;
+  const ids = cards.map(c => c.id);
+  await db.from('progress').delete().in('card_id', ids);
+  await db.from('cards').delete().in('id', ids);
+  await loadCards();
+});
 
 // ── Import Markdown ───────────────────────────────────────────
 let parsedMdCards = [];

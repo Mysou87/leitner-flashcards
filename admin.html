@@ -212,13 +212,16 @@
         </div>
 
         <div class="panel">
-          <h3>Cartes (<span id="cards-count">…</span>)</h3>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+            <h3>Cartes (<span id="cards-count">…</span>)</h3>
+            <button class="btn-danger" id="btn-clear-deck">Vider le paquet</button>
+          </div>
           <div style="overflow-x:auto">
             <table id="cards-table">
               <thead>
                 <tr>
-                  <th style="width:40%">Question</th>
-                  <th style="width:40%">Réponse</th>
+                  <th style="width:38%">Question</th>
+                  <th style="width:38%">Réponse</th>
                   <th>Statut</th>
                   <th>Actions</th>
                 </tr>
