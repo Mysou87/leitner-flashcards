@@ -118,6 +118,12 @@ function renderStreak() {
   document.getElementById('topbar-streak').textContent = streak >= 2 ? `🔥 ${streak}j` : '';
 }
 
+function streakMessage(streak) {
+  if (streak <= 1) return `Tu as révisé aujourd'hui, bravo ! 💪 Reviens demain pour démarrer une série.`;
+  if (streak < 7) return `🔥 ${streak} jours de suite ! Continue comme ça, tu es sur une belle lancée.`;
+  return `🔥 ${streak} jours de suite ! Impressionnant, ne lâche rien !`;
+}
+
 function renderProgressOverview() {
   const counts = Array(9).fill(0); // index 1-8
   allProgress.forEach(p => { if (p.box_level >= 1 && p.box_level <= 8) counts[p.box_level]++; });
@@ -396,6 +402,12 @@ async function recordAnswer(correct) {
     renderCard();
   } else {
     await saveSession();
+    allSessionsStudent.push({
+      reviewed_at: new Date().toISOString(),
+      deck_id: currentDeck.id,
+      cards_reviewed: sessionCorrect + sessionWrong,
+      cards_correct: sessionCorrect,
+    });
     showEndView(sessionCorrect, sessionWrong, false);
   }
 }
@@ -428,6 +440,9 @@ function showEndView(correct, wrong, upToDate, limitReached = false) {
   let emoji = '📚';
   let title = 'Session terminée !';
 
+  const streakEl = document.getElementById('end-streak-message');
+  streakEl.classList.add('hidden');
+
   if (upToDate) {
     if (limitReached) {
       emoji = '⏰';
@@ -458,6 +473,14 @@ function showEndView(correct, wrong, upToDate, limitReached = false) {
     if (pct === 100) emoji = '🎉';
     else if (pct >= 80) emoji = '😄';
     else if (pct >= 60) emoji = '🙂';
+
+    if (total > 0) {
+      const streak = computeStreak(allSessionsStudent);
+      if (streak >= 1) {
+        streakEl.textContent = streakMessage(streak);
+        streakEl.classList.remove('hidden');
+      }
+    }
 
     document.getElementById('end-stats').innerHTML = `
       <div class="stat-row">

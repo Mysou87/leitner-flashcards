@@ -21,17 +21,21 @@ const BADGE_DEFS = [
   { icon: '🌈', name: 'Arc-en-ciel',       check: d => d.distinctDecks >= 3 },
 ];
 
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function computeStreak(sessions) {
   if (!sessions || sessions.length === 0) return 0;
-  const daySet = new Set(sessions.map(s => s.reviewed_at.split('T')[0]));
-  const todayStr = new Date().toISOString().split('T')[0];
+  const daySet = new Set(sessions.map(s => localDateStr(new Date(s.reviewed_at))));
+  const todayStr = localDateStr(new Date());
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const yesterdayStr = localDateStr(yesterday);
   const start = daySet.has(todayStr) ? todayStr : daySet.has(yesterdayStr) ? yesterdayStr : null;
   if (!start) return 0;
   let streak = 0;
   const d = new Date(start + 'T12:00:00');
-  while (daySet.has(d.toISOString().split('T')[0])) {
+  while (daySet.has(localDateStr(d))) {
     streak++;
     d.setDate(d.getDate() - 1);
   }
