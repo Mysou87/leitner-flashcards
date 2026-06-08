@@ -97,7 +97,7 @@ async function loadDashboard() {
   const progEl = document.getElementById('dash-progress');
   const [{ data: allStudents }, { data: allProgress }, { data: allSessions }, { data: allCardIds }] = await Promise.all([
     db.from('students').select('id, first_name, last_name, year_level').eq('is_active', true).order('last_name'),
-    db.from('progress').select('student_id, card_id, box_level'),
+    db.from('progress').select('student_id, card_id, box_level, next_review'),
     db.from('review_sessions').select('student_id, reviewed_at, deck_id, cards_reviewed, cards_correct'),
     db.from('cards').select('id, deck_id').eq('is_active', true),
   ]);
@@ -116,6 +116,11 @@ async function loadDashboard() {
     if (!progressByStudent[p.student_id]) progressByStudent[p.student_id] = [];
     progressByStudent[p.student_id].push(p);
   });
+
+  // Statut "à jour / en retard" : tolérance d'une journée pour laisser le temps à l'élève de se connecter
+  const lagDate = new Date();
+  lagDate.setDate(lagDate.getDate() - 1);
+  const lagDateStr = localDateStr(lagDate);
 
   const sessionsByStudent = {};
   const daysByStudent = {};
@@ -138,6 +143,10 @@ async function loadDashboard() {
     const last = lastSession[s.id]
       ? new Date(lastSession[s.id]).toLocaleDateString('fr-BE')
       : '—';
+    const lateCards = (progressByStudent[s.id] || []).filter(p => p.next_review && p.next_review < lagDateStr);
+    const status = lateCards.length === 0
+      ? `<span class="badge badge-green">✅ À jour</span>`
+      : `<span class="badge badge-red" title="Cartes dont la révision était prévue avant le ${lagDate.toLocaleDateString('fr-BE')}">⚠️ ${lateCards.length} en retard</span>`;
     const badgeData = computeBadgeData(progressByStudent[s.id] || [], sessionsByStudent[s.id] || [], allCardIds || []);
     const unlocked = BADGE_DEFS.filter(b => b.check(badgeData));
     const badgeIcons = unlocked.map(b => b.icon).join('');
@@ -149,12 +158,13 @@ async function loadDashboard() {
       <td>${mastered}</td>
       <td>${days}</td>
       <td>${last}</td>
+      <td>${status}</td>
       <td style="font-size:1.1rem;letter-spacing:1px;min-width:80px" title="${badgeTitle}">${badgeIcons || '—'}</td>
     </tr>`;
   }).join('');
 
   progEl.innerHTML = `<div style="overflow-x:auto"><table>
-    <thead><tr><th>Élève</th><th>Année</th><th>Cartes vues</th><th>Maîtrisées (7+)</th><th>Jours</th><th>Dernière révision</th><th>Badges</th></tr></thead>
+    <thead><tr><th>Élève</th><th>Année</th><th>Cartes vues</th><th>Maîtrisées (7+)</th><th>Jours</th><th>Dernière révision</th><th>Statut</th><th>Badges</th></tr></thead>
     <tbody>${rows || '<tr><td colspan="7" style="color:var(--text-light)">Aucun élève.</td></tr>'}</tbody>
   </table></div>`;
 }

@@ -182,7 +182,7 @@ function renderDeckSelectionView() {
 
     const label = document.createElement('div');
     label.className = 'year-label';
-    label.textContent = year === myYear ? `${year} — Ma classe` : year;
+    label.textContent = year === myYear ? `${year} — Mon année` : year;
     section.appendChild(label);
 
     groups[year].forEach(deck => {
@@ -350,7 +350,7 @@ function renderDecks() {
 
     const label = document.createElement('div');
     label.className = 'year-label';
-    label.textContent = year === myYear ? `${year} — Ma classe` : year;
+    label.textContent = year === myYear ? `${year} — Mon année` : year;
     section.appendChild(label);
 
     groups[year].forEach(deck => {
