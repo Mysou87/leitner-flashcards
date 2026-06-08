@@ -41,12 +41,27 @@
         <div id="boxes-chart" style="display:flex;align-items:flex-end;gap:4px;height:48px;margin-bottom:6px"></div>
         <div id="boxes-legend" style="display:flex;gap:4px;font-size:0.72rem;color:var(--text-light)"></div>
       </div>
-      <div id="badges-section" class="hidden" style="background:white;border-radius:14px;padding:16px;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
-        <div style="font-size:0.78rem;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Mes badges</div>
-        <div id="badges-list" class="reward-badges-grid"></div>
+      <div id="badges-link" class="deck-card hidden" style="margin-bottom:20px">
+        <div class="deck-info">
+          <h3>🏅 Mes badges</h3>
+          <div class="deck-meta" id="badges-summary"></div>
+        </div>
+        <span style="color:var(--text-light);font-size:1.3rem">→</span>
       </div>
       <h2>Choisir un paquet</h2>
       <div id="decks-list"><div class="spinner">Chargement…</div></div>
+    </div>
+  </div>
+
+  <!-- ── VUE : MES BADGES ─────────────────────────────────── -->
+  <div id="view-badges" class="view">
+    <div class="top-bar">
+      <button class="btn-ghost" id="btn-back-badges">← Retour</button>
+      <span class="top-bar-name">🏅 Mes badges</span>
+      <span style="width:90px"></span>
+    </div>
+    <div class="container">
+      <div id="badges-list-page" class="reward-badges-grid"></div>
     </div>
   </div>
 

@@ -109,7 +109,7 @@ async function loadDecksView() {
 
   renderStreak();
   renderProgressOverview();
-  renderBadges();
+  renderBadgesSummary();
   renderDecks();
 }
 
@@ -144,18 +144,34 @@ function renderProgressOverview() {
   ).join('');
 }
 
-function renderBadges() {
-  const section = document.getElementById('badges-section');
-  if (allProgress.length === 0) { section.classList.add('hidden'); return; }
+function renderBadgesGrid(targetId) {
   const data = computeBadgeData(allProgress, allSessionsStudent, allCardIds);
-  section.classList.remove('hidden');
-  document.getElementById('badges-list').innerHTML = BADGE_DEFS.map(b =>
+  document.getElementById(targetId).innerHTML = BADGE_DEFS.map(b =>
     `<div class="reward-badge ${b.check(data) ? 'unlocked' : 'locked'}" title="${b.name}">
       <div class="rb-icon">${b.icon}</div>
       <div class="rb-name">${b.name}</div>
     </div>`
   ).join('');
+  return data;
 }
+
+function renderBadgesSummary() {
+  const link = document.getElementById('badges-link');
+  if (allProgress.length === 0) { link.classList.add('hidden'); return; }
+  const data = computeBadgeData(allProgress, allSessionsStudent, allCardIds);
+  const unlockedCount = BADGE_DEFS.filter(b => b.check(data)).length;
+  link.classList.remove('hidden');
+  document.getElementById('badges-summary').textContent = `${unlockedCount} / ${BADGE_DEFS.length} débloqués`;
+}
+
+document.getElementById('badges-link').addEventListener('click', () => {
+  renderBadgesGrid('badges-list-page');
+  showView('view-badges');
+});
+
+document.getElementById('btn-back-badges').addEventListener('click', () => {
+  showView('view-decks');
+});
 
 function renderDecks() {
   const todayStr = today();
