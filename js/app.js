@@ -4,6 +4,7 @@ let allDecks = [];
 let allProgress = [];        // { card_id, box_level, next_review }
 let allCardIds = [];         // { id, deck_id }
 let allSessionsStudent = []; // { reviewed_at, deck_id, cards_reviewed, cards_correct }
+let allDeckSelections = []; // { deck_id, selected }
 
 let currentDeck = null;
 let sessionCards = [];
@@ -95,23 +96,125 @@ async function loadDecksView() {
   showView('view-decks');
   document.getElementById('decks-list').innerHTML = '<div class="spinner">Chargement…</div>';
 
-  const [decksRes, progressRes, cardsRes, sessionsRes] = await Promise.all([
+  const [decksRes, progressRes, cardsRes, sessionsRes, selectionsRes] = await Promise.all([
     db.from('decks').select('*').eq('is_active', true),
     db.from('progress').select('card_id, box_level, next_review, first_seen').eq('student_id', student.id),
     db.from('cards').select('id, deck_id').eq('is_active', true),
     db.from('review_sessions').select('reviewed_at, deck_id, cards_reviewed, cards_correct').eq('student_id', student.id),
+    db.from('student_deck_selection').select('deck_id, selected').eq('student_id', student.id),
   ]);
 
   allDecks = decksRes.data || [];
   allProgress = progressRes.data || [];
   allCardIds = cardsRes.data || [];
   allSessionsStudent = sessionsRes.data || [];
+  allDeckSelections = selectionsRes.data || [];
+
+  await seedDeckSelections();
 
   renderStreak();
   renderProgressOverview();
   renderBadgesSummary();
+  renderDeckSelectionLink();
   renderDecks();
 }
+
+// ── Sélection des paquets par l'élève ─────────────────────────
+function isDeckSelected(deckId) {
+  const row = allDeckSelections.find(s => s.deck_id === deckId);
+  return row ? row.selected : false;
+}
+
+async function seedDeckSelections() {
+  const knownIds = new Set(allDeckSelections.map(s => s.deck_id));
+  const toSeed = allDecks.filter(d => d.year_level === student.year_level && !knownIds.has(d.id));
+  if (toSeed.length === 0) return;
+  const rows = toSeed.map(d => ({ student_id: student.id, deck_id: d.id, selected: true }));
+  const { data } = await db.from('student_deck_selection').insert(rows).select('deck_id, selected');
+  if (data) allDeckSelections.push(...data);
+}
+
+async function toggleDeckSelection(deckId, selected) {
+  const existing = allDeckSelections.find(s => s.deck_id === deckId);
+  if (existing) existing.selected = selected;
+  else allDeckSelections.push({ deck_id: deckId, selected });
+
+  await db.from('student_deck_selection').upsert({
+    student_id: student.id,
+    deck_id: deckId,
+    selected,
+  }, { onConflict: 'student_id,deck_id' });
+
+  renderDeckSelectionLink();
+}
+
+function renderDeckSelectionLink() {
+  const link = document.getElementById('deck-selection-link');
+  if (allDecks.length === 0) { link.classList.add('hidden'); return; }
+  link.classList.remove('hidden');
+  const selectedCount = allDecks.filter(d => isDeckSelected(d.id)).length;
+  document.getElementById('deck-selection-summary').textContent = `${selectedCount} / ${allDecks.length} sélectionnés`;
+}
+
+function renderDeckSelectionView() {
+  const myYear = student.year_level;
+  const sorted = [...allDecks].sort((a, b) => {
+    const am = a.year_level === myYear ? 0 : 1;
+    const bm = b.year_level === myYear ? 0 : 1;
+    if (am !== bm) return am - bm;
+    return (a.year_level || '').localeCompare(b.year_level || '') ||
+           a.name.localeCompare(b.name);
+  });
+
+  const groups = {};
+  sorted.forEach(d => {
+    const k = d.year_level || 'Autre';
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(d);
+  });
+
+  const container = document.getElementById('deck-selection-list');
+  container.innerHTML = '';
+
+  Object.keys(groups).forEach(year => {
+    const section = document.createElement('div');
+    section.className = 'year-section' + (year === myYear ? ' my-year' : '');
+
+    const label = document.createElement('div');
+    label.className = 'year-label';
+    label.textContent = year === myYear ? `${year} — Ma classe` : year;
+    section.appendChild(label);
+
+    groups[year].forEach(deck => {
+      const row = document.createElement('div');
+      row.className = 'deck-card';
+      row.style.cursor = 'default';
+      row.innerHTML = `
+        <div class="deck-info">
+          <h3>${deck.name}</h3>
+          <div class="deck-meta">${deck.subject}${deck.teacher ? ' · ' + deck.teacher : ''}</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" ${isDeckSelected(deck.id) ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>`;
+      row.querySelector('input').addEventListener('change', e => toggleDeckSelection(deck.id, e.target.checked));
+      section.appendChild(row);
+    });
+
+    container.appendChild(section);
+  });
+}
+
+document.getElementById('deck-selection-link').addEventListener('click', () => {
+  renderDeckSelectionView();
+  showView('view-deck-selection');
+});
+
+document.getElementById('btn-back-deck-selection').addEventListener('click', () => {
+  renderDecks();
+  showView('view-decks');
+});
 
 function renderStreak() {
   const streak = computeStreak(allSessionsStudent);
@@ -182,6 +285,7 @@ document.getElementById('btn-back-badges').addEventListener('click', () => {
 function renderDecks() {
   const todayStr = today();
   const progressMap = Object.fromEntries(allProgress.map(p => [p.card_id, p]));
+  const visibleDecks = allDecks.filter(d => isDeckSelected(d.id));
 
   // Compter les nouvelles cartes déjà vues aujourd'hui par paquet
   const newSeenTodayByDeck = {};
@@ -194,7 +298,7 @@ function renderDecks() {
 
   // Calculer les cartes dues par paquet (avec limite journalière pour les nouvelles)
   const stats = {};
-  allDecks.forEach(d => { stats[d.id] = { due: 0, new_total: 0 }; });
+  visibleDecks.forEach(d => { stats[d.id] = { due: 0, new_total: 0 }; });
   allCardIds.forEach(c => {
     if (!stats[c.deck_id]) return;
     const p = progressMap[c.id];
@@ -204,7 +308,7 @@ function renderDecks() {
       stats[c.deck_id].due++;
     }
   });
-  allDecks.forEach(d => {
+  visibleDecks.forEach(d => {
     const s = stats[d.id];
     const newSeenToday = newSeenTodayByDeck[d.id] || 0;
     s.effective = s.due + Math.min(Math.max(0, MAX_NEW_CARDS_PER_DAY - newSeenToday), s.new_total);
@@ -212,7 +316,7 @@ function renderDecks() {
 
   // Trier : année de l'élève en premier, puis alphabétique
   const myYear = student.year_level;
-  const sorted = [...allDecks].sort((a, b) => {
+  const sorted = [...visibleDecks].sort((a, b) => {
     const am = a.year_level === myYear ? 0 : 1;
     const bm = b.year_level === myYear ? 0 : 1;
     if (am !== bm) return am - bm;
@@ -233,6 +337,10 @@ function renderDecks() {
 
   if (allDecks.length === 0) {
     container.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:32px">Aucun paquet disponible pour le moment.</p>';
+    return;
+  }
+  if (visibleDecks.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:32px">Aucun paquet sélectionné. Touche « 📦 Mes paquets » ci-dessus pour en choisir.</p>';
     return;
   }
 

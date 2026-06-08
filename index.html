@@ -49,6 +49,13 @@
         </div>
         <span style="color:var(--text-light);font-size:1.3rem">→</span>
       </div>
+      <div id="deck-selection-link" class="deck-card hidden" style="margin-bottom:20px">
+        <div class="deck-info">
+          <h3>📦 Mes paquets</h3>
+          <div class="deck-meta" id="deck-selection-summary"></div>
+        </div>
+        <span style="color:var(--text-light);font-size:1.3rem">→</span>
+      </div>
       <h2>Choisir un paquet</h2>
       <div id="decks-list"><div class="spinner">Chargement…</div></div>
     </div>
@@ -63,6 +70,19 @@
     </div>
     <div class="container">
       <div id="badges-list-page" class="reward-badges-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── VUE : MES PAQUETS ────────────────────────────────── -->
+  <div id="view-deck-selection" class="view">
+    <div class="top-bar">
+      <button class="btn-ghost" id="btn-back-deck-selection">← Retour</button>
+      <span class="top-bar-name">📦 Mes paquets</span>
+      <span style="width:90px"></span>
+    </div>
+    <div class="container">
+      <p style="color:var(--text-light);font-size:0.85rem;margin-bottom:18px">Choisis les paquets que tu veux voir apparaître dans ta liste de révision. Les paquets de ta classe sont sélectionnés par défaut.</p>
+      <div id="deck-selection-list"></div>
     </div>
   </div>
 
