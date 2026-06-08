@@ -5,7 +5,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const ADMIN_PASSWORD = 'leitner2025';
 
 // Intervalles en jours pour chaque boîte (index = numéro de boîte)
-const LEITNER_INTERVALS = [0, 1, 2, 4, 7, 14, 21, 30, 60];
+const LEITNER_INTERVALS = [0, 1, 1, 2, 4, 7, 14, 21, 30];
 
 // Nombre maximum de nouvelles cartes introduites par jour et par paquet
 const MAX_NEW_CARDS_PER_DAY = 5;
