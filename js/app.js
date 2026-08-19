@@ -45,6 +45,21 @@ function renderMath(el) {
   });
 }
 
+// ── Mémorisation de l'élève connecté ──────────────────────────
+const STUDENT_STORAGE_KEY = 'leitner_student_id';
+
+function rememberStudent(id) {
+  try { localStorage.setItem(STUDENT_STORAGE_KEY, id); } catch (e) { /* stockage indisponible */ }
+}
+
+function forgetStudent() {
+  try { localStorage.removeItem(STUDENT_STORAGE_KEY); } catch (e) { /* stockage indisponible */ }
+}
+
+function storedStudentId() {
+  try { return localStorage.getItem(STUDENT_STORAGE_KEY); } catch (e) { return null; }
+}
+
 // ── Connexion ─────────────────────────────────────────────────
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -75,26 +90,74 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   }
 
   student = data;
+  rememberStudent(data.id);
   await loadDecksView();
 });
 
+// Reconnexion automatique : l'élève reste connecté d'une visite à l'autre
+async function autoLogin() {
+  const id = storedStudentId();
+  if (!id) return;
+
+  const form = document.getElementById('login-form');
+  const loadingEl = document.getElementById('login-loading');
+  form.classList.add('hidden');
+  loadingEl.classList.remove('hidden');
+
+  const { data, error } = await db
+    .from('students')
+    .select('*')
+    .eq('id', id)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!data) {
+    // Élève supprimé ou désactivé : on oublie. En cas de simple souci
+    // réseau, on garde la mémorisation pour la prochaine visite.
+    if (!error) forgetStudent();
+    loadingEl.classList.add('hidden');
+    form.classList.remove('hidden');
+    return;
+  }
+
+  student = data;
+  await loadDecksView();
+  loadingEl.classList.add('hidden');
+  form.classList.remove('hidden');
+}
+
 // ── Déconnexion ───────────────────────────────────────────────
 document.getElementById('btn-logout').addEventListener('click', () => {
+  forgetStudent();
   student = null;
   allDecks = [];
   allProgress = [];
   allCardIds = [];
+  allSessionsStudent = [];
+  allDeckSelections = [];
   document.getElementById('input-firstname').value = '';
   document.getElementById('input-lastname').value = '';
   showView('view-login');
 });
 
 // ── Vue : liste des paquets ───────────────────────────────────
-async function loadDecksView() {
+// Redessine toute la page de départ à partir des données en mémoire
+// (à appeler chaque fois qu'on y revient : les cartes ont pu changer de boîte)
+function refreshDecksView() {
+  renderStreak();
+  renderProgressOverview();
+  renderBadgesSummary();
+  renderDeckSelectionLink();
+  renderDecks();
+}
+
+async function loadDecksView({ silent = false } = {}) {
   document.getElementById('topbar-name').textContent =
     `${student.first_name} ${student.last_name}`;
-  showView('view-decks');
-  document.getElementById('decks-list').innerHTML = '<div class="spinner">Chargement…</div>';
+  if (!silent) {
+    showView('view-decks');
+    document.getElementById('decks-list').innerHTML = '<div class="spinner">Chargement…</div>';
+  }
 
   const [decksRes, progressRes, cardsRes, sessionsRes, selectionsRes] = await Promise.all([
     db.from('decks').select('*').eq('is_active', true),
@@ -112,12 +175,18 @@ async function loadDecksView() {
 
   await seedDeckSelections();
 
-  renderStreak();
-  renderProgressOverview();
-  renderBadgesSummary();
-  renderDeckSelectionLink();
-  renderDecks();
+  refreshDecksView();
 }
+
+// Recharger les données quand l'élève revient sur l'application après
+// l'avoir laissée en arrière-plan (révision sur un autre appareil,
+// ou changement de jour pendant que l'onglet restait ouvert)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!student) return;
+  if (!document.getElementById('view-decks').classList.contains('active')) return;
+  loadDecksView({ silent: true });
+});
 
 // ── Sélection des paquets par l'élève ─────────────────────────
 function isDeckSelected(deckId) {
@@ -212,7 +281,7 @@ document.getElementById('deck-selection-link').addEventListener('click', () => {
 });
 
 document.getElementById('btn-back-deck-selection').addEventListener('click', () => {
-  renderDecks();
+  refreshDecksView();
   showView('view-decks');
 });
 
@@ -279,6 +348,7 @@ document.getElementById('badges-link').addEventListener('click', () => {
 });
 
 document.getElementById('btn-back-badges').addEventListener('click', () => {
+  refreshDecksView();
   showView('view-decks');
 });
 
@@ -617,11 +687,14 @@ function showEndView(correct, wrong, upToDate, limitReached = false) {
 
 // Retour aux paquets depuis la fin ou depuis la révision
 document.getElementById('btn-back-end').addEventListener('click', () => {
-  renderDecks();
+  refreshDecksView();
   showView('view-decks');
 });
 
 document.getElementById('btn-back-review').addEventListener('click', () => {
-  renderDecks();
+  refreshDecksView();
   showView('view-decks');
 });
+
+// ── Démarrage ─────────────────────────────────────────────────
+autoLogin();
