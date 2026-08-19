@@ -666,11 +666,11 @@ function showEndView(correct, wrong, upToDate, limitReached = false) {
         <span class="stat-value">${total}</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">Je savais</span>
+        <span class="stat-label">Correct</span>
         <span class="stat-value good">${correct}</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">Je ne savais pas</span>
+        <span class="stat-label">À revoir</span>
         <span class="stat-value bad">${wrong}</span>
       </div>
       <div class="stat-row">
