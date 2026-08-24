@@ -327,6 +327,15 @@ label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-b
 .card-content ul, .card-content ol { padding-left: 20px; margin-bottom: 8px; }
 .card-content code { background: #F1F5F9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
 .card-content strong { color: var(--primary-dark); }
+.card-content img {
+  display: block;
+  max-width: 100%;
+  max-height: 45vh;
+  width: auto;
+  height: auto;
+  margin: 10px auto;
+  border-radius: 8px;
+}
 
 .card-divider {
   border: none;
