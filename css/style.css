@@ -220,6 +220,17 @@ label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-b
 .due-badge.up-to-date { background: var(--success); }
 .due-badge.loading { background: var(--border); color: var(--text-light); }
 
+/* Session fusionnée : le geste principal, donc plus visible que les paquets */
+.deck-card.revise-tout {
+  background: var(--primary);
+  padding: 20px 16px;
+  margin-bottom: 18px;
+}
+.deck-card.revise-tout .deck-info h3 { color: white; font-size: 1.15rem; }
+.deck-card.revise-tout .deck-meta { color: rgba(255,255,255,0.85); }
+.deck-card.revise-tout .due-badge { background: white; color: var(--primary-dark); }
+.deck-card.revise-tout .due-badge.up-to-date { background: rgba(255,255,255,0.25); color: white; }
+
 /* ─── TOGGLE SWITCH ──────────────────────────────────────── */
 .toggle-switch {
   position: relative;

@@ -6,7 +6,8 @@ let allCardIds = [];         // { id, deck_id }
 let allSessionsStudent = []; // { reviewed_at, deck_id, cards_reviewed, cards_correct }
 let allDeckSelections = []; // { deck_id, selected }
 
-let currentDeck = null;
+let sessionDecks = [];       // les paquets de la session en cours
+let sessionParPaquet = {};   // deck_id -> { reviewed, correct }
 let sessionCards = [];
 let sessionIndex = 0;
 let sessionCorrect = 0;
@@ -352,21 +353,24 @@ document.getElementById('btn-back-badges').addEventListener('click', () => {
   showView('view-decks');
 });
 
+// Nouvelles cartes encore autorisées aujourd'hui. La limite est globale :
+// c'est un budget quotidien partagé par tous les paquets, sinon une douzaine
+// de paquets cochés donneraient une session interminable.
+function nouvellesRestantesAujourdhui() {
+  const todayStr = today();
+  const vuesAujourdhui = allProgress.filter(p => p.first_seen === todayStr).length;
+  return Math.max(0, MAX_NEW_CARDS_PER_DAY - vuesAujourdhui);
+}
+
 function renderDecks() {
   const todayStr = today();
   const progressMap = Object.fromEntries(allProgress.map(p => [p.card_id, p]));
   const visibleDecks = allDecks.filter(d => isDeckSelected(d.id));
 
-  // Compter les nouvelles cartes déjà vues aujourd'hui par paquet
-  const newSeenTodayByDeck = {};
-  allProgress.forEach(p => {
-    if (p.first_seen === todayStr) {
-      const card = allCardIds.find(c => c.id === p.card_id);
-      if (card) newSeenTodayByDeck[card.deck_id] = (newSeenTodayByDeck[card.deck_id] || 0) + 1;
-    }
-  });
+  // Budget de nouvelles cartes restant pour aujourd'hui, tous paquets confondus
+  const restantGlobal = nouvellesRestantesAujourdhui();
 
-  // Calculer les cartes dues par paquet (avec limite journalière pour les nouvelles)
+  // Calculer les cartes dues par paquet
   const stats = {};
   visibleDecks.forEach(d => { stats[d.id] = { due: 0, new_total: 0 }; });
   allCardIds.forEach(c => {
@@ -378,11 +382,28 @@ function renderDecks() {
       stats[c.deck_id].due++;
     }
   });
+  // L'étiquette d'un paquet ne montre que ses cartes dues. Les nouvelles
+  // cartes viennent d'un budget commun, donc les compter dans chaque paquet
+  // afficherait « 5 cartes » partout et laisserait croire à un total énorme.
   visibleDecks.forEach(d => {
     const s = stats[d.id];
-    const newSeenToday = newSeenTodayByDeck[d.id] || 0;
-    s.effective = s.due + Math.min(Math.max(0, MAX_NEW_CARDS_PER_DAY - newSeenToday), s.new_total);
+    if (s.due > 0) {
+      s.badge = `${s.due} carte${s.due > 1 ? 's' : ''}`;
+      s.classe = '';
+    } else if (s.new_total > 0) {
+      s.badge = 'À découvrir';
+      s.classe = '';
+    } else {
+      s.badge = '✓ À jour';
+      s.classe = 'up-to-date';
+    }
   });
+
+  // Total de la session fusionnée : toutes les cartes dues, plus le budget
+  // de nouvelles réparti sur l'ensemble des paquets cochés
+  const totalDues = visibleDecks.reduce((n, d) => n + stats[d.id].due, 0);
+  const totalNouvelles = visibleDecks.reduce((n, d) => n + stats[d.id].new_total, 0);
+  const totalSession = totalDues + Math.min(restantGlobal, totalNouvelles);
 
   // Trier : année de l'élève en premier, puis alphabétique
   const myYear = student.year_level;
@@ -414,6 +435,26 @@ function renderDecks() {
     return;
   }
 
+  // Session fusionnée : toutes les cartes dues de tous les paquets cochés,
+  // mélangées. Réviser plusieurs sujets dans la même session retient mieux
+  // que de les enchainer par blocs.
+  const tout = document.createElement('div');
+  tout.className = 'deck-card revise-tout';
+  tout.innerHTML = `
+    <div class="deck-info">
+      <h3>⚡ Tout réviser</h3>
+      <div class="deck-meta">${visibleDecks.length} paquet${visibleDecks.length > 1 ? 's' : ''} mélangé${visibleDecks.length > 1 ? 's' : ''}</div>
+    </div>
+    <div class="due-badge ${totalSession === 0 ? 'up-to-date' : ''}">
+      ${totalSession === 0 ? '✓ À jour' : `${totalSession} carte${totalSession > 1 ? 's' : ''}`}
+    </div>`;
+  tout.addEventListener('click', () => startSession(visibleDecks));
+  container.appendChild(tout);
+
+  const separateur = document.createElement('h2');
+  separateur.textContent = 'Ou un paquet à la fois';
+  container.appendChild(separateur);
+
   Object.keys(groups).forEach(year => {
     const section = document.createElement('div');
     section.className = 'year-section' + (year === myYear ? ' my-year' : '');
@@ -424,7 +465,7 @@ function renderDecks() {
     section.appendChild(label);
 
     groups[year].forEach(deck => {
-      const s = stats[deck.id] || { due: 0, total: 0 };
+      const s = stats[deck.id] || { badge: '✓ À jour', classe: 'up-to-date' };
       const card = document.createElement('div');
       card.className = 'deck-card';
       card.innerHTML = `
@@ -432,9 +473,7 @@ function renderDecks() {
           <h3>${deck.name}</h3>
           <div class="deck-meta">${deck.subject}${deck.teacher ? ' · ' + deck.teacher : ''}</div>
         </div>
-        <div class="due-badge ${s.effective === 0 ? 'up-to-date' : ''}">
-          ${s.effective === 0 ? '✓ À jour' : `${s.effective} carte${s.effective > 1 ? 's' : ''}`}
-        </div>`;
+        <div class="due-badge ${s.classe}">${s.badge}</div>`;
       card.addEventListener('click', () => startSession(deck));
       section.appendChild(card);
     });
@@ -444,16 +483,23 @@ function renderDecks() {
 }
 
 // ── Session de révision ───────────────────────────────────────
-async function startSession(deck) {
-  currentDeck = deck;
+// Accepte un seul paquet ou une liste de paquets. Dans les deux cas les
+// cartes sont mélangées entre elles.
+async function startSession(paquets) {
+  const decks = Array.isArray(paquets) ? paquets : [paquets];
+  if (decks.length === 0) return;
+
+  sessionDecks = decks;
+  sessionParPaquet = {};
+
   const todayStr = today();
   const progressMap = Object.fromEntries(allProgress.map(p => [p.card_id, p]));
 
-  // Charger les cartes complètes du paquet
+  // Charger les cartes complètes des paquets concernés
   const { data: cards } = await db
     .from('cards')
     .select('*')
-    .eq('deck_id', deck.id)
+    .in('deck_id', decks.map(d => d.id))
     .eq('is_active', true);
 
   // Cartes déjà vues et dues aujourd'hui
@@ -462,13 +508,9 @@ async function startSession(deck) {
     return p && p.next_review <= todayStr;
   });
 
-  // Nouvelles cartes (jamais vues), limitées à MAX_NEW_CARDS_PER_DAY par jour
+  // Nouvelles cartes (jamais vues), dans la limite du budget global du jour
   const newCards = (cards || []).filter(c => !progressMap[c.id]);
-  const deckCardIds = new Set((cards || []).map(c => c.id));
-  const newSeenToday = allProgress.filter(p =>
-    p.first_seen === todayStr && deckCardIds.has(p.card_id)
-  ).length;
-  const remaining = Math.max(0, MAX_NEW_CARDS_PER_DAY - newSeenToday);
+  const remaining = nouvellesRestantesAujourdhui();
   const selectedNew = newCards.sort(() => Math.random() - 0.5).slice(0, remaining);
 
   sessionCards = [...dueCards, ...selectedNew].sort(() => Math.random() - 0.5);
@@ -561,6 +603,14 @@ async function recordAnswer(correct) {
     allProgress.push({ card_id: card.id, box_level: newBox, next_review: nextReview, first_seen: today() });
   }
 
+  // Compter aussi par paquet : une session fusionnée doit produire une ligne
+  // de statistique par paquet touché, sinon les badges liés aux paquets
+  // (« Arc-en-ciel », « Paquet maîtrisé ») ne verraient plus rien.
+  const parPaquet = sessionParPaquet[card.deck_id] || { reviewed: 0, correct: 0 };
+  parPaquet.reviewed++;
+  if (correct) parPaquet.correct++;
+  sessionParPaquet[card.deck_id] = parPaquet;
+
   if (correct) {
     sessionCorrect++;
   } else {
@@ -580,23 +630,27 @@ async function recordAnswer(correct) {
     renderCard();
   } else {
     await saveSession();
-    allSessionsStudent.push({
-      reviewed_at: new Date().toISOString(),
-      deck_id: currentDeck.id,
-      cards_reviewed: sessionCorrect + sessionWrong,
-      cards_correct: sessionCorrect,
-    });
+    const maintenant = new Date().toISOString();
+    lignesDeSession().forEach(l => allSessionsStudent.push({ ...l, reviewed_at: maintenant }));
     showEndView(sessionCorrect, sessionWrong, false);
   }
 }
 
+// Une ligne par paquet réellement révisé pendant la session
+function lignesDeSession() {
+  return Object.entries(sessionParPaquet).map(([deckId, s]) => ({
+    deck_id: deckId,
+    cards_reviewed: s.reviewed,
+    cards_correct: s.correct,
+  }));
+}
+
 async function saveSession() {
-  await db.from('review_sessions').insert({
-    student_id: student.id,
-    deck_id: currentDeck.id,
-    cards_reviewed: sessionCorrect + sessionWrong,
-    cards_correct: sessionCorrect,
-  });
+  const lignes = lignesDeSession();
+  if (lignes.length === 0) return;
+  await db.from('review_sessions').insert(
+    lignes.map(l => ({ student_id: student.id, ...l }))
+  );
 }
 
 // ── Vue : fin de session ──────────────────────────────────────
@@ -632,14 +686,14 @@ function showEndView(correct, wrong, upToDate, limitReached = false) {
         </div>
         <div class="stat-row">
           <span class="stat-label">Prochaine série</span>
-          <span class="stat-value">Reviens demain pour 5 nouvelles cartes 📅</span>
+          <span class="stat-value">Reviens demain pour ${MAX_NEW_CARDS_PER_DAY} nouvelles cartes 📅</span>
         </div>`;
     } else {
       emoji = '🎯';
       title = 'Tout est à jour !';
       document.getElementById('end-stats').innerHTML = `
         <div class="stat-row">
-          <span class="stat-label">Ce paquet</span>
+          <span class="stat-label">${sessionDecks.length > 1 ? 'Tes paquets' : 'Ce paquet'}</span>
           <span class="stat-value">Aucune carte à réviser aujourd'hui</span>
         </div>
         <div class="stat-row">
