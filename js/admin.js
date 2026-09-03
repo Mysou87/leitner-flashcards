@@ -411,7 +411,137 @@ function openCards(deckId, deckName) {
   document.getElementById('tab-cards').classList.add('active');
 
   loadCards();
+  loadAssign();
 }
+
+// ── Donner un paquet à des élèves ─────────────────────────────
+// Écrit dans student_deck_selection, la table que l'élève modifie lui-même
+// depuis « 📦 Mes paquets ». Cocher ici revient à le faire à sa place.
+let assignStudents = [];
+
+async function loadAssign() {
+  const [elevesRes, selRes] = await Promise.all([
+    db.from('students').select('id, first_name, last_name, year_level')
+      .eq('is_active', true).order('last_name'),
+    db.from('student_deck_selection').select('student_id, selected')
+      .eq('deck_id', currentDeckId),
+  ]);
+
+  assignStudents = elevesRes.data || [];
+  const dejaCoches = (selRes.data || []).filter(s => s.selected).length;
+  const paquet = allDecks.find(d => d.id === currentDeckId);
+
+  document.getElementById('assign-state').textContent =
+    `${dejaCoches} élève${dejaCoches > 1 ? 's' : ''} ${dejaCoches > 1 ? 'ont' : 'a'} ce paquet coché aujourd'hui.`;
+
+  // Années proposées : celles où il y a des élèves, celle du paquet en tête
+  const annees = [...new Set(assignStudents.map(e => e.year_level).filter(Boolean))].sort();
+  const select = document.getElementById('assign-year');
+  select.innerHTML = annees.map(a => {
+    const n = assignStudents.filter(e => e.year_level === a).length;
+    return `<option value="${a}">${a} (${n} élèves)</option>`;
+  }).join('');
+  if (paquet && annees.includes(paquet.year_level)) select.value = paquet.year_level;
+
+  renderAssignStudents('');
+  majAssignPicked();
+}
+
+function renderAssignStudents(filtre) {
+  const propre = s => String(s || '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const f = propre(filtre);
+  const liste = assignStudents.filter(e =>
+    !f || propre(`${e.first_name} ${e.last_name}`).includes(f)
+  );
+  document.getElementById('assign-students-list').innerHTML = liste.length === 0
+    ? '<p class="hint">Aucun élève ne correspond.</p>'
+    : liste.map(e => `
+        <label class="quiz-deck">
+          <input type="checkbox" value="${e.id}">
+          <span class="quiz-deck-nom">${e.first_name} ${e.last_name}</span>
+          <span class="quiz-deck-meta">${e.year_level || ''}</span>
+        </label>`).join('');
+}
+
+function majAssignPicked() {
+  const n = document.querySelectorAll('#assign-students-list input:checked').length;
+  document.getElementById('assign-picked').textContent =
+    `${n} élève${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
+}
+
+document.querySelectorAll('input[name="assign-scope"]').forEach(r => {
+  r.addEventListener('change', () => {
+    const parEleve = document.querySelector('input[name="assign-scope"]:checked').value === 'students';
+    document.getElementById('assign-students-wrap').classList.toggle('hidden', !parEleve);
+    document.getElementById('assign-year').disabled = parEleve;
+  });
+});
+
+document.getElementById('assign-search').addEventListener('input', (e) => {
+  renderAssignStudents(e.target.value);
+  majAssignPicked();
+});
+
+document.getElementById('assign-students-list').addEventListener('change', majAssignPicked);
+
+async function appliquerAssign(selected) {
+  const parEleve = document.querySelector('input[name="assign-scope"]:checked').value === 'students';
+  let cibles;
+
+  if (parEleve) {
+    cibles = [...document.querySelectorAll('#assign-students-list input:checked')].map(c => c.value);
+    if (cibles.length === 0) {
+      showMsg('assign-msg', 'Choisis au moins un élève.', true);
+      return;
+    }
+  } else {
+    const annee = document.getElementById('assign-year').value;
+    cibles = assignStudents.filter(e => e.year_level === annee).map(e => e.id);
+    if (cibles.length === 0) {
+      showMsg('assign-msg', `Aucun élève actif en ${annee}.`, true);
+      return;
+    }
+  }
+
+  const verbe = selected ? 'Cocher' : 'Décocher';
+  if (!confirm(`${verbe} ce paquet chez ${cibles.length} élève(s) ?`)) return;
+
+  const btn = document.getElementById(selected ? 'btn-assign-add' : 'btn-assign-remove');
+  const texte = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'En cours…';
+
+  // « a_annoncer » déclenche le bandeau d'annonce chez l'élève. On ne le pose
+  // que sur un cochage : décocher n'a rien à annoncer.
+  const { error } = await db.from('student_deck_selection').upsert(
+    cibles.map(id => ({
+      student_id: id,
+      deck_id: currentDeckId,
+      selected,
+      a_annoncer: selected,
+    })),
+    { onConflict: 'student_id,deck_id' }
+  );
+
+  btn.disabled = false;
+  btn.textContent = texte;
+
+  if (error) {
+    const manque = /a_annoncer/.test(error.message);
+    showMsg('assign-msg', manque
+      ? 'La colonne « a_annoncer » manque en base : lance le script SQL fourni dans Supabase.'
+      : 'Erreur : ' + error.message, true);
+    return;
+  }
+  showMsg('assign-msg',
+    `${verbe.replace('er', 'é')} chez ${cibles.length} élève(s). ` +
+    (selected ? 'Ils verront une annonce' : 'Visible') + ' à leur prochaine ouverture de l\'app.');
+  await loadAssign();
+}
+
+document.getElementById('btn-assign-add').addEventListener('click', () => appliquerAssign(true));
+document.getElementById('btn-assign-remove').addEventListener('click', () => appliquerAssign(false));
 
 document.getElementById('btn-back-to-decks').addEventListener('click', () => {
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));

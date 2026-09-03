@@ -181,6 +181,28 @@
         <h2 id="cards-deck-title">Cartes du paquet</h2>
 
         <div class="panel">
+          <h3>Donner ce paquet à des élèves</h3>
+          <p class="hint" id="assign-state">…</p>
+          <div class="assign-row">
+            <label class="quiz-option"><input type="radio" name="assign-scope" value="year" checked> Toute une année</label>
+            <select id="assign-year" style="width:auto"></select>
+          </div>
+          <div class="assign-row">
+            <label class="quiz-option"><input type="radio" name="assign-scope" value="students"> Certains élèves</label>
+          </div>
+          <div id="assign-students-wrap" class="hidden">
+            <input type="text" id="assign-search" placeholder="Filtrer par nom…">
+            <div id="assign-students-list" class="assign-list"></div>
+            <p class="hint" id="assign-picked">0 élève sélectionné</p>
+          </div>
+          <div class="quiz-actions" style="margin-top:12px">
+            <button class="btn-secondary" id="btn-assign-add" style="width:auto">Cocher ce paquet</button>
+            <button class="btn-sm" id="btn-assign-remove" style="background:#F1F5F9;color:var(--text);padding:8px 14px;border-radius:8px">Décocher</button>
+          </div>
+          <p id="assign-msg" class="hidden" style="margin-top:8px"></p>
+        </div>
+
+        <div class="panel">
           <h3>Ajouter une carte</h3>
           <form id="form-add-card">
             <div>

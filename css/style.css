@@ -238,6 +238,36 @@ label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-b
 .apercu p { display: inline; margin: 0; }
 .apercu img { max-height: 3.2em; width: auto; vertical-align: middle; }
 
+/* ─── ANNONCE D'UN NOUVEAU PAQUET (élève) ────────────────── */
+.annonce {
+  position: relative;
+  background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+  border: 1px solid #6EE7B7;
+  color: #065F46;
+  border-radius: var(--radius);
+  padding: 15px 42px 15px 18px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.annonce strong { color: #047857; }
+.annonce-fermer {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px; padding: 0;
+  background: transparent; border: none;
+  color: #047857; font-size: 1rem; font-weight: 700;
+  cursor: pointer; border-radius: 50%; line-height: 1;
+}
+.annonce-fermer:hover { background: rgba(4, 120, 87, 0.12); }
+
+/* ─── DONNER UN PAQUET À DES ÉLÈVES (admin) ──────────────── */
+.assign-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.assign-list {
+  max-height: 260px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; margin-top: 8px;
+}
+
 /* ─── INTERROGER LA CLASSE (admin) ───────────────────────── */
 .hint { font-size: 0.85rem; color: var(--text-light); margin-bottom: 10px; }
 

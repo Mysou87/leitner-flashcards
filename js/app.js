@@ -85,7 +85,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   btn.disabled = false;
 
   if (!data) {
-    errEl.textContent = 'Prénom ou nom non reconnu. Vérifie l\'orthographe ou contacte ton professeur.';
+    errEl.textContent = 'Prénom ou nom non reconnu. Vérifie l\'orthographe ou contacte ton enseignante.';
     errEl.classList.remove('hidden');
     return;
   }
@@ -165,7 +165,10 @@ async function loadDecksView({ silent = false } = {}) {
     db.from('progress').select('card_id, box_level, next_review, first_seen').eq('student_id', student.id),
     db.from('cards').select('id, deck_id').eq('is_active', true),
     db.from('review_sessions').select('reviewed_at, deck_id, cards_reviewed, cards_correct').eq('student_id', student.id),
-    db.from('student_deck_selection').select('deck_id, selected').eq('student_id', student.id),
+    // select('*') plutôt que la liste des colonnes : si la colonne
+    // « a_annoncer » n'existe pas encore en base, la requête passe quand même
+    // et l'annonce reste simplement muette.
+    db.from('student_deck_selection').select('*').eq('student_id', student.id),
   ]);
 
   allDecks = decksRes.data || [];
@@ -177,7 +180,46 @@ async function loadDecksView({ silent = false } = {}) {
   await seedDeckSelections();
 
   refreshDecksView();
+  annoncerNouveauxPaquets();
 }
+
+// ── Annonce des paquets ajoutés par la professeure ────────────
+// Le panneau d'administration marque « a_annoncer » sur les paquets qu'elle
+// coche elle-même. Les paquets que l'élève choisit lui-même, et celui coché
+// d'office à la première connexion, ne déclenchent rien.
+function annoncerNouveauxPaquets() {
+  const bandeau = document.getElementById('nouveaux-paquets');
+  const aAnnoncer = allDeckSelections.filter(s => s.selected && s.a_annoncer);
+
+  if (aAnnoncer.length === 0) { bandeau.classList.add('hidden'); return; }
+
+  const noms = aAnnoncer
+    .map(s => (allDecks.find(d => d.id === s.deck_id) || {}).name)
+    .filter(Boolean);
+  if (noms.length === 0) { bandeau.classList.add('hidden'); return; }
+
+  const liste = noms.map(n => `« ${n} »`).join(', ');
+  document.getElementById('annonce-texte').innerHTML = noms.length === 1
+    ? `🎁 Ton enseignante t'a ajouté un nouveau paquet : <strong>${liste}</strong>.<br>Il est déjà coché, tu le trouveras dans ta liste.`
+    : `🎁 Ton enseignante t'a ajouté ${noms.length} nouveaux paquets : <strong>${liste}</strong>.<br>Ils sont déjà cochés, tu les trouveras dans ta liste.`;
+  bandeau.classList.remove('hidden');
+}
+
+// L'annonce ne disparait que quand l'élève la ferme : il ne peut pas la rater
+document.getElementById('btn-annonce-ok').addEventListener('click', async () => {
+  const bandeau = document.getElementById('nouveaux-paquets');
+  bandeau.classList.add('hidden');
+
+  const vus = allDeckSelections.filter(s => s.a_annoncer);
+  vus.forEach(s => { s.a_annoncer = false; });
+  if (vus.length === 0 || !student) return;
+
+  await db
+    .from('student_deck_selection')
+    .update({ a_annoncer: false })
+    .eq('student_id', student.id)
+    .eq('a_annoncer', true);
+});
 
 // Recharger les données quand l'élève revient sur l'application après
 // l'avoir laissée en arrière-plan (révision sur un autre appareil,
