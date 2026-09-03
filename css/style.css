@@ -220,6 +220,24 @@ label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-b
 .due-badge.up-to-date { background: var(--success); }
 .due-badge.loading { background: var(--border); color: var(--text-light); }
 
+/* ─── CELLULES DU TABLEAU DES CARTES (admin) ─────────────── */
+/* Le texte entier est inséré, jamais tronqué : couper une formule
+   l'empêcherait de s'afficher. La hauteur est donc bornée ici. */
+.cards-cell {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  max-height: 4.4em;
+  overflow: hidden;
+}
+.cards-cell p { margin: 0 0 3px; }
+.cards-cell p:last-child { margin-bottom: 0; }
+.cards-cell img { max-height: 3.2em; width: auto; display: inline-block; }
+.cards-cell ol, .cards-cell ul { margin: 0; padding-left: 18px; }
+
+.apercu { display: inline; }
+.apercu p { display: inline; margin: 0; }
+.apercu img { max-height: 3.2em; width: auto; vertical-align: middle; }
+
 /* ─── INTERROGER LA CLASSE (admin) ───────────────────────── */
 .hint { font-size: 0.85rem; color: var(--text-light); margin-bottom: 10px; }
 

@@ -439,8 +439,8 @@ async function loadCards() {
   cards.forEach(c => { cardData[c.id] = { front: c.front, back: c.back }; });
   tbody.innerHTML = cards.map(c => `
     <tr style="${!c.is_active ? 'opacity:0.5' : ''}">
-      <td style="font-size:0.85rem">${truncate(c.front)}</td>
-      <td style="font-size:0.85rem">${truncate(c.back)}</td>
+      <td><div class="cards-cell" data-recto="${c.id}"></div></td>
+      <td><div class="cards-cell" data-verso="${c.id}"></div></td>
       <td><span class="badge ${c.is_active ? 'badge-green' : 'badge-gray'}">${c.is_active ? 'Active' : 'Inactive'}</span></td>
       <td style="white-space:nowrap;display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn-sm" style="background:var(--primary);color:white"
@@ -451,6 +451,15 @@ async function loadCards() {
           onclick="deleteCard('${c.id}')">Supprimer</button>
       </td>
     </tr>`).join('');
+
+  // Rendu Markdown et formules dans le tableau. On insère le texte entier
+  // plutôt qu'un extrait : couper une formule en plein milieu l'empêcherait
+  // de s'afficher. La hauteur de la cellule est bornée par le CSS, et le
+  // texte complet reste accessible par « Modifier ».
+  cards.forEach(c => {
+    rendreContenu(tbody.querySelector(`[data-recto="${c.id}"]`), c.front);
+    rendreContenu(tbody.querySelector(`[data-verso="${c.id}"]`), c.back);
+  });
 }
 
 document.getElementById('form-add-card').addEventListener('submit', async (e) => {
@@ -619,13 +628,23 @@ function handleMarkdownParse(text) {
     alert('Aucune carte trouvée. Vérifie le format : ## Question suivie de la réponse.');
     return;
   }
-  document.getElementById('md-preview-count').textContent =
-    `${parsedMdCards.length} carte(s) détectée(s) — aperçu :`;
-  document.getElementById('md-preview-list').innerHTML = parsedMdCards.map((c, i) => `
+  afficherApercuCartes(parsedMdCards, `${parsedMdCards.length} carte(s) détectée(s) — aperçu :`);
+}
+
+// Aperçu avant import, avec les formules rendues : c'est le moment où une
+// formule mal écrite doit se voir, avant qu'elle ne parte en base.
+function afficherApercuCartes(cartes, titre) {
+  document.getElementById('md-preview-count').textContent = titre;
+  const liste = document.getElementById('md-preview-list');
+  liste.innerHTML = cartes.map((c, i) => `
     <div style="padding:8px 0;border-bottom:1px solid var(--border)">
-      <strong>Q${i + 1} :</strong> ${c.front}<br>
-      <span style="color:var(--text-light)">R : ${c.back.length > 100 ? c.back.slice(0, 100) + '…' : c.back}</span>
+      <div><strong>Q${i + 1} :</strong> <span class="apercu" data-recto="${i}"></span></div>
+      <div style="color:var(--text-light)">R : <span class="apercu" data-verso="${i}"></span></div>
     </div>`).join('');
+  cartes.forEach((c, i) => {
+    rendreContenu(liste.querySelector(`[data-recto="${i}"]`), c.front);
+    rendreContenu(liste.querySelector(`[data-verso="${i}"]`), c.back);
+  });
   document.getElementById('md-preview').classList.remove('hidden');
 }
 
@@ -676,14 +695,7 @@ document.getElementById('excel-file').addEventListener('change', (e) => {
     }
 
     parsedMdCards = cards;
-    document.getElementById('md-preview-count').textContent =
-      `${cards.length} carte(s) détectée(s) depuis Excel — aperçu :`;
-    document.getElementById('md-preview-list').innerHTML = cards.map((c, i) => `
-      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
-        <strong>Q${i + 1} :</strong> ${c.front}<br>
-        <span style="color:var(--text-light)">R : ${c.back.length > 100 ? c.back.slice(0, 100) + '…' : c.back}</span>
-      </div>`).join('');
-    document.getElementById('md-preview').classList.remove('hidden');
+    afficherApercuCartes(cards, `${cards.length} carte(s) détectée(s) depuis Excel — aperçu :`);
   };
   reader.readAsArrayBuffer(file);
 });
