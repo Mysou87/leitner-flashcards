@@ -220,6 +220,69 @@ label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-b
 .due-badge.up-to-date { background: var(--success); }
 .due-badge.loading { background: var(--border); color: var(--text-light); }
 
+/* ─── INTERROGER LA CLASSE (admin) ───────────────────────── */
+.hint { font-size: 0.85rem; color: var(--text-light); margin-bottom: 10px; }
+
+.quiz-decks { display: flex; flex-direction: column; gap: 14px; margin-bottom: 14px; }
+.quiz-year { break-inside: avoid; }
+.quiz-year-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 700; font-size: 0.8rem; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-light);
+  border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-bottom: 6px;
+}
+.quiz-deck {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 5px 0; cursor: pointer;
+}
+.quiz-deck input { width: auto; margin: 0; flex-shrink: 0; }
+.quiz-deck-nom { font-weight: 600; }
+.quiz-deck-meta { font-size: 0.8rem; color: var(--text-light); }
+
+.quiz-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.quiz-option { display: flex; align-items: center; gap: 6px; font-size: 0.88rem; cursor: pointer; }
+.quiz-option input { width: auto; margin: 0; }
+
+.quiz-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 4px;
+}
+
+.quiz-list { padding-left: 26px; }
+.quiz-item { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.quiz-item:last-child { border-bottom: none; }
+.quiz-tag {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-light); margin-bottom: 3px;
+}
+.quiz-q { font-weight: 600; font-size: 1.02rem; }
+.quiz-r {
+  margin-top: 7px; padding: 8px 12px;
+  background: #F1F5F9; border-radius: 8px;
+  border-left: 3px solid var(--success);
+  cursor: pointer; transition: background 0.12s;
+}
+.quiz-r:hover { background: #E8EEF5; }
+/* Réponse masquée : le bloc garde sa place mais devient illisible */
+.quiz-r.cachee {
+  color: transparent; background: #E2E8F0;
+  border-left-color: var(--border); user-select: none;
+  min-height: 1.7em; position: relative;
+}
+.quiz-r.cachee * { visibility: hidden; }
+.quiz-r.cachee::after {
+  content: 'Réponse cachée'; position: absolute; left: 12px; top: 8px;
+  color: var(--text-light); font-size: 0.85rem; font-style: italic;
+}
+.quiz-r img { max-width: 100%; max-height: 30vh; height: auto; display: block; }
+
+@media print {
+  .no-print, .admin-nav, #quiz-decks-list { display: none !important; }
+  .panel { box-shadow: none; padding: 0; }
+  .quiz-item { break-inside: avoid; padding: 8px 0; }
+  .quiz-r { background: transparent; border-left: 2px solid #000; }
+}
+
 /* Session fusionnée : le geste principal, donc plus visible que les paquets */
 .deck-card.revise-tout {
   background: var(--primary);

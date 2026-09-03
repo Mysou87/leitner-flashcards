@@ -21,6 +21,7 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
     if (tab.dataset.tab === 'students') loadStudents();
     if (tab.dataset.tab === 'decks') loadDecks();
     if (tab.dataset.tab === 'dashboard') loadDashboard();
+    if (tab.dataset.tab === 'quiz') loadQuizDecks();
   });
 });
 
@@ -704,4 +705,156 @@ document.getElementById('btn-confirm-md-import').addEventListener('click', async
   document.getElementById('md-file').value = '';
   parsedMdCards = [];
   await loadCards();
+});
+
+// ── INTERROGER LA CLASSE ──────────────────────────────────────
+// Afficher les questions-réponses d'un ou plusieurs paquets, pour
+// interroger les élèves à l'oral. Les réponses sont masquées par défaut.
+
+function rendreContenu(el, texte) {
+  el.innerHTML = marked.parse(texte || '');
+  renderMathInElement(el, {
+    delimiters: [
+      { left: '$$', right: '$$', display: true },
+      { left: '$', right: '$', display: false },
+    ],
+    throwOnError: false,
+  });
+}
+
+async function loadQuizDecks() {
+  const container = document.getElementById('quiz-decks-list');
+  const { data: decks } = await db
+    .from('decks')
+    .select('id, name, subject, year_level, is_active')
+    .order('year_level')
+    .order('name');
+
+  const { data: cards } = await db.from('cards').select('deck_id').eq('is_active', true);
+  const parPaquet = {};
+  (cards || []).forEach(c => { parPaquet[c.deck_id] = (parPaquet[c.deck_id] || 0) + 1; });
+
+  const actifs = (decks || []).filter(d => d.is_active);
+  if (actifs.length === 0) {
+    container.innerHTML = '<p class="hint">Aucun paquet actif.</p>';
+    return;
+  }
+
+  // Grouper par année pour retrouver ses paquets rapidement
+  const groupes = {};
+  actifs.forEach(d => {
+    const cle = d.year_level || 'Autre';
+    if (!groupes[cle]) groupes[cle] = [];
+    groupes[cle].push(d);
+  });
+
+  container.innerHTML = Object.keys(groupes).sort().map(annee => `
+    <div class="quiz-year">
+      <div class="quiz-year-head">
+        <span>${annee}</span>
+        <button class="btn-sm" data-annee="${annee}">Tout / rien</button>
+      </div>
+      ${groupes[annee].map(d => `
+        <label class="quiz-deck">
+          <input type="checkbox" value="${d.id}" data-annee="${annee}">
+          <span class="quiz-deck-nom">${d.name}</span>
+          <span class="quiz-deck-meta">${d.subject || ''} · ${parPaquet[d.id] || 0} cartes</span>
+        </label>`).join('')}
+    </div>`).join('');
+
+  // « Tout / rien » sur une année
+  container.querySelectorAll('button[data-annee]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cases = container.querySelectorAll(`input[data-annee="${btn.dataset.annee}"]`);
+      const tousCoches = [...cases].every(c => c.checked);
+      cases.forEach(c => { c.checked = !tousCoches; });
+    });
+  });
+}
+
+document.getElementById('btn-quiz-show').addEventListener('click', async () => {
+  const choisis = [...document.querySelectorAll('#quiz-decks-list input:checked')].map(c => c.value);
+  if (choisis.length === 0) {
+    showMsg('quiz-msg', 'Choisis au moins un paquet.', true);
+    return;
+  }
+
+  const btn = document.getElementById('btn-quiz-show');
+  btn.disabled = true;
+  btn.textContent = 'Chargement…';
+
+  const { data: cards, error } = await db
+    .from('cards')
+    .select('front, back, deck_id')
+    .in('deck_id', choisis)
+    .eq('is_active', true);
+
+  btn.disabled = false;
+  btn.textContent = 'Afficher les questions';
+
+  if (error) { showMsg('quiz-msg', 'Erreur : ' + error.message, true); return; }
+  if (!cards || cards.length === 0) {
+    showMsg('quiz-msg', 'Ces paquets ne contiennent aucune carte active.', true);
+    return;
+  }
+
+  // Nom du paquet à afficher sur chaque carte, utile quand on en mélange plusieurs
+  const nomsPaquets = {};
+  document.querySelectorAll('#quiz-decks-list input:checked').forEach(c => {
+    nomsPaquets[c.value] = c.parentElement.querySelector('.quiz-deck-nom').textContent;
+  });
+
+  let liste = [...cards];
+  if (document.getElementById('quiz-shuffle').checked) {
+    liste.sort(() => Math.random() - 0.5);
+  }
+
+  const masquer = document.getElementById('quiz-hide').checked;
+  const ol = document.getElementById('quiz-list');
+  ol.innerHTML = '';
+
+  liste.forEach(carte => {
+    const li = document.createElement('li');
+    li.className = 'quiz-item';
+
+    const q = document.createElement('div');
+    q.className = 'quiz-q';
+    rendreContenu(q, carte.front);
+
+    const r = document.createElement('div');
+    r.className = 'quiz-r' + (masquer ? ' cachee' : '');
+    rendreContenu(r, carte.back);
+    r.addEventListener('click', () => r.classList.toggle('cachee'));
+
+    if (choisis.length > 1) {
+      const tag = document.createElement('div');
+      tag.className = 'quiz-tag no-print';
+      tag.textContent = nomsPaquets[carte.deck_id] || '';
+      li.appendChild(tag);
+    }
+    li.appendChild(q);
+    li.appendChild(r);
+    ol.appendChild(li);
+  });
+
+  document.getElementById('quiz-count').textContent =
+    `${liste.length} question${liste.length > 1 ? 's' : ''} · ${choisis.length} paquet${choisis.length > 1 ? 's' : ''}`;
+  document.getElementById('btn-quiz-toggle-all').textContent = masquer ? 'Tout révéler' : 'Tout masquer';
+  document.getElementById('quiz-result').classList.remove('hidden');
+  document.getElementById('quiz-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+document.getElementById('btn-quiz-toggle-all').addEventListener('click', () => {
+  const reponses = document.querySelectorAll('#quiz-list .quiz-r');
+  const toutesCachees = [...reponses].every(r => r.classList.contains('cachee'));
+  reponses.forEach(r => r.classList.toggle('cachee', !toutesCachees));
+  document.getElementById('btn-quiz-toggle-all').textContent =
+    toutesCachees ? 'Tout masquer' : 'Tout révéler';
+});
+
+document.getElementById('btn-quiz-print').addEventListener('click', () => {
+  // À l'impression, les réponses cachées doivent redevenir lisibles
+  document.querySelectorAll('#quiz-list .quiz-r').forEach(r => r.classList.remove('cachee'));
+  document.getElementById('btn-quiz-toggle-all').textContent = 'Tout masquer';
+  window.print();
 });

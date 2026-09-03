@@ -195,11 +195,27 @@ function isDeckSelected(deckId) {
   return row ? row.selected : false;
 }
 
+// Comparaison de noms tolérante aux accents et aux majuscules
+function memeNom(a, b) {
+  const propre = s => String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+  return propre(a) === propre(b);
+}
+
+// À la toute première connexion, un seul paquet est coché : celui du
+// fonctionnement du cours, de l'année de l'élève. Tous les autres sont
+// laissés décochés, à l'élève de les prendre au fur et à mesure.
 async function seedDeckSelections() {
   const knownIds = new Set(allDeckSelections.map(s => s.deck_id));
-  const toSeed = allDecks.filter(d => d.year_level === student.year_level && !knownIds.has(d.id));
-  if (toSeed.length === 0) return;
-  const rows = toSeed.map(d => ({ student_id: student.id, deck_id: d.id, selected: true }));
+  const aCocher = allDecks.filter(d =>
+    d.year_level === student.year_level &&
+    memeNom(d.name, PAQUET_COCHE_PAR_DEFAUT) &&
+    !knownIds.has(d.id)
+  );
+  if (aCocher.length === 0) return;
+
+  const rows = aCocher.map(d => ({ student_id: student.id, deck_id: d.id, selected: true }));
   const { data } = await db.from('student_deck_selection').insert(rows).select('deck_id, selected');
   if (data) allDeckSelections.push(...data);
 }

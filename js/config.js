@@ -11,4 +11,9 @@ const LEITNER_INTERVALS = [0, 1, 1, 2, 4, 7, 14, 21, 30];
 // CONFONDUS : c'est un budget quotidien partagé, pas une limite par paquet.
 const MAX_NEW_CARDS_PER_DAY = 5;
 
+// Seul paquet coché automatiquement à la première connexion d'un élève,
+// dans son année. Les autres sont décochés : c'est à l'élève de les
+// prendre. Mettre une chaine vide pour ne rien cocher du tout.
+const PAQUET_COCHE_PAR_DEFAUT = 'Fonctionnement du cours';
+
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

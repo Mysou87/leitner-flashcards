@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Administration — Flashcards</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 </head>
 <body class="admin-body">
 
@@ -30,6 +31,7 @@
       <div class="admin-tab" data-tab="students">Élèves</div>
       <div class="admin-tab" data-tab="decks">Paquets</div>
       <div class="admin-tab" data-tab="cards">Cartes</div>
+      <div class="admin-tab" data-tab="quiz">Interroger</div>
     </nav>
 
     <div class="admin-content">
@@ -247,6 +249,34 @@
         </div>
       </div>
 
+      <!-- ── INTERROGER ──────────────────────────────────── -->
+      <div id="tab-quiz" class="admin-section">
+        <h2>Interroger la classe</h2>
+
+        <div class="panel no-print">
+          <h3>Choisir les paquets</h3>
+          <div id="quiz-decks-list" class="quiz-decks"><div class="spinner">Chargement…</div></div>
+          <div class="quiz-actions">
+            <button class="btn-secondary" id="btn-quiz-show" style="width:auto">Afficher les questions</button>
+            <label class="quiz-option"><input type="checkbox" id="quiz-shuffle"> Mélanger</label>
+            <label class="quiz-option"><input type="checkbox" id="quiz-hide" checked> Masquer les réponses</label>
+          </div>
+          <p id="quiz-msg" class="hidden" style="margin-top:8px"></p>
+        </div>
+
+        <div class="panel hidden" id="quiz-result">
+          <div class="quiz-header no-print">
+            <h3 id="quiz-count">Questions</h3>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn-sm" id="btn-quiz-toggle-all">Tout révéler</button>
+              <button class="btn-sm" id="btn-quiz-print">Imprimer</button>
+            </div>
+          </div>
+          <p class="hint no-print">Touche une réponse pour la révéler ou la cacher.</p>
+          <ol id="quiz-list" class="quiz-list"></ol>
+        </div>
+      </div>
+
     </div><!-- /admin-content -->
   </div><!-- /admin-panel -->
 
@@ -272,6 +302,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/badges.js"></script>
   <script src="js/admin.js"></script>
