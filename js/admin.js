@@ -419,15 +419,76 @@ function openCards(deckId, deckName) {
 // depuis « 📦 Mes paquets ». Cocher ici revient à le faire à sa place.
 let assignStudents = [];
 
+// Composition des groupes, lue dans les données de l'app de suivi des élèves
+// (même projet Supabase, même table `students`). On ne stocke donc aucun
+// groupe dans Leitner : la liste suit le classeur « Feuilles de cotes ».
+// Clé = student_id, valeur = liste des groupes de l'élève (normalement un seul).
+let groupesParEleve = new Map();
+let groupesDisponibles = []; // [{ nom, eleves: [id, …] }]
+
+async function chargerGroupes() {
+  if (groupesDisponibles.length > 0) return;
+
+  const { data: cours, error: errCours } =
+    await db.from('suivi_courses').select('id, sheet_name');
+  if (errCours || !cours) return; // pas de données de suivi : on s'en passe
+
+  const idParOnglet = new Map(cours.map(c => [c.sheet_name, c.id]));
+  const voulus = GROUPES_ELEVES
+    .map(g => ({ ...g, courseId: idParOnglet.get(g.onglet) }))
+    .filter(g => g.courseId != null);
+  if (voulus.length === 0) return;
+
+  const { data: inscriptions, error: errInscr } = await db
+    .from('suivi_enrollments')
+    .select('course_id, student_id')
+    .eq('is_active', true)
+    .in('course_id', voulus.map(g => g.courseId));
+  if (errInscr || !inscriptions) return;
+
+  groupesDisponibles = voulus.map(g => ({
+    nom: g.nom,
+    eleves: inscriptions.filter(i => i.course_id === g.courseId).map(i => i.student_id),
+  })).filter(g => g.eleves.length > 0);
+
+  groupesParEleve = new Map();
+  groupesDisponibles.forEach(g => {
+    g.eleves.forEach(id => {
+      if (!groupesParEleve.has(id)) groupesParEleve.set(id, []);
+      groupesParEleve.get(id).push(g.nom);
+    });
+  });
+}
+
 async function loadAssign() {
   const [elevesRes, selRes] = await Promise.all([
     db.from('students').select('id, first_name, last_name, year_level')
       .eq('is_active', true).order('last_name'),
     db.from('student_deck_selection').select('student_id, selected')
       .eq('deck_id', currentDeckId),
+    chargerGroupes(),
   ]);
 
   assignStudents = elevesRes.data || [];
+
+  // Groupes : s'ils sont illisibles, on retire l'option et on repasse à l'année
+  const ligneGroupe = document.getElementById('assign-row-group');
+  const radioGroupe = document.querySelector('input[name="assign-scope"][value="group"]');
+  const selectGroupe = document.getElementById('assign-group');
+  if (groupesDisponibles.length === 0) {
+    ligneGroupe.classList.add('hidden');
+    if (radioGroupe.checked) {
+      document.querySelector('input[name="assign-scope"][value="year"]').checked = true;
+      majAssignScope();
+    }
+  } else {
+    ligneGroupe.classList.remove('hidden');
+    const choisi = selectGroupe.value;
+    selectGroupe.innerHTML = groupesDisponibles
+      .map(g => `<option value="${g.nom}">${g.nom} (${g.eleves.length} élèves)</option>`)
+      .join('');
+    if (groupesDisponibles.some(g => g.nom === choisi)) selectGroupe.value = choisi;
+  }
   const dejaCoches = (selRes.data || []).filter(s => s.selected).length;
   const paquet = allDecks.find(d => d.id === currentDeckId);
 
@@ -451,8 +512,10 @@ function renderAssignStudents(filtre) {
   const propre = s => String(s || '').normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const f = propre(filtre);
+  const etiquette = e => (groupesParEleve.get(e.id) || []).join(', ') || e.year_level || '';
+  // Le filtre porte aussi sur le groupe : taper « 5e Chimie B » suffit
   const liste = assignStudents.filter(e =>
-    !f || propre(`${e.first_name} ${e.last_name}`).includes(f)
+    !f || propre(`${e.first_name} ${e.last_name} ${etiquette(e)}`).includes(f)
   );
   document.getElementById('assign-students-list').innerHTML = liste.length === 0
     ? '<p class="hint">Aucun élève ne correspond.</p>'
@@ -460,7 +523,7 @@ function renderAssignStudents(filtre) {
         <label class="quiz-deck">
           <input type="checkbox" value="${e.id}">
           <span class="quiz-deck-nom">${e.first_name} ${e.last_name}</span>
-          <span class="quiz-deck-meta">${e.year_level || ''}</span>
+          <span class="quiz-deck-meta">${etiquette(e)}</span>
         </label>`).join('');
 }
 
@@ -470,12 +533,19 @@ function majAssignPicked() {
     `${n} élève${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
 }
 
+function portee() {
+  return document.querySelector('input[name="assign-scope"]:checked').value;
+}
+
+function majAssignScope() {
+  const p = portee();
+  document.getElementById('assign-students-wrap').classList.toggle('hidden', p !== 'students');
+  document.getElementById('assign-year').disabled = p !== 'year';
+  document.getElementById('assign-group').disabled = p !== 'group';
+}
+
 document.querySelectorAll('input[name="assign-scope"]').forEach(r => {
-  r.addEventListener('change', () => {
-    const parEleve = document.querySelector('input[name="assign-scope"]:checked').value === 'students';
-    document.getElementById('assign-students-wrap').classList.toggle('hidden', !parEleve);
-    document.getElementById('assign-year').disabled = parEleve;
-  });
+  r.addEventListener('change', majAssignScope);
 });
 
 document.getElementById('assign-search').addEventListener('input', (e) => {
@@ -486,18 +556,32 @@ document.getElementById('assign-search').addEventListener('input', (e) => {
 document.getElementById('assign-students-list').addEventListener('change', majAssignPicked);
 
 async function appliquerAssign(selected) {
-  const parEleve = document.querySelector('input[name="assign-scope"]:checked').value === 'students';
+  const p = portee();
   let cibles;
+  let quoi;
 
-  if (parEleve) {
+  if (p === 'students') {
     cibles = [...document.querySelectorAll('#assign-students-list input:checked')].map(c => c.value);
+    quoi = `${cibles.length} élève(s)`;
     if (cibles.length === 0) {
       showMsg('assign-msg', 'Choisis au moins un élève.', true);
+      return;
+    }
+  } else if (p === 'group') {
+    const nom = document.getElementById('assign-group').value;
+    const groupe = groupesDisponibles.find(g => g.nom === nom);
+    // On ne garde que les élèves encore actifs dans Leitner
+    const actifs = new Set(assignStudents.map(e => e.id));
+    cibles = (groupe ? groupe.eleves : []).filter(id => actifs.has(id));
+    quoi = `${cibles.length} élève(s) du groupe ${nom}`;
+    if (cibles.length === 0) {
+      showMsg('assign-msg', `Aucun élève actif dans le groupe ${nom}.`, true);
       return;
     }
   } else {
     const annee = document.getElementById('assign-year').value;
     cibles = assignStudents.filter(e => e.year_level === annee).map(e => e.id);
+    quoi = `${cibles.length} élève(s) de ${annee}`;
     if (cibles.length === 0) {
       showMsg('assign-msg', `Aucun élève actif en ${annee}.`, true);
       return;
@@ -505,7 +589,7 @@ async function appliquerAssign(selected) {
   }
 
   const verbe = selected ? 'Cocher' : 'Décocher';
-  if (!confirm(`${verbe} ce paquet chez ${cibles.length} élève(s) ?`)) return;
+  if (!confirm(`${verbe} ce paquet chez ${quoi} ?`)) return;
 
   const btn = document.getElementById(selected ? 'btn-assign-add' : 'btn-assign-remove');
   const texte = btn.textContent;
@@ -535,7 +619,7 @@ async function appliquerAssign(selected) {
     return;
   }
   showMsg('assign-msg',
-    `${verbe.replace('er', 'é')} chez ${cibles.length} élève(s). ` +
+    `${verbe.replace('er', 'é')} chez ${quoi}. ` +
     (selected ? 'Ils verront une annonce' : 'Visible') + ' à leur prochaine ouverture de l\'app.');
   await loadAssign();
 }

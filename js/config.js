@@ -16,4 +16,21 @@ const MAX_NEW_CARDS_PER_DAY = 5;
 // prendre. Mettre une chaine vide pour ne rien cocher du tout.
 const PAQUET_COCHE_PAR_DEFAUT = 'Fonctionnement du cours';
 
+// Groupes d'élèves proposés dans l'admin pour attribuer un paquet.
+// Ils ne sont PAS recopiés ici : la composition est lue en direct dans les
+// données de l'app de suivi (« Feuilles de cotes »), donc elle se met à jour
+// toute seule à chaque import du classeur.
+//   nom    = ce qui s'affiche dans l'admin
+//   onglet = nom de l'onglet du classeur (colonne sheet_name de suivi_courses)
+// Onglets volontairement absents : « 5e Physique C » (mêmes élèves que
+// « 5e Chimie C ») et « 4A Maths » (cours du collègue, mêmes élèves que « 4A »).
+const GROUPES_ELEVES = [
+  { nom: '4A', onglet: '4A Sciences' },
+  { nom: '4e Option', onglet: '4e Option' },
+  { nom: '5e Chimie A', onglet: '5e Chimie A' },
+  { nom: '5e Chimie B', onglet: '5e Chimie B' },
+  { nom: '5e Chimie C', onglet: '5e Chimie C' },
+  { nom: '6e Chimie', onglet: '6e Chimie' },
+];
+
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

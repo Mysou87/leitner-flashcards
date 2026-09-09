@@ -183,9 +183,13 @@
         <div class="panel">
           <h3>Donner ce paquet à des élèves</h3>
           <p class="hint" id="assign-state">…</p>
+          <div class="assign-row" id="assign-row-group">
+            <label class="quiz-option"><input type="radio" name="assign-scope" value="group" checked> Un groupe</label>
+            <select id="assign-group" style="width:auto"></select>
+          </div>
           <div class="assign-row">
-            <label class="quiz-option"><input type="radio" name="assign-scope" value="year" checked> Toute une année</label>
-            <select id="assign-year" style="width:auto"></select>
+            <label class="quiz-option"><input type="radio" name="assign-scope" value="year"> Toute une année</label>
+            <select id="assign-year" style="width:auto" disabled></select>
           </div>
           <div class="assign-row">
             <label class="quiz-option"><input type="radio" name="assign-scope" value="students"> Certains élèves</label>
