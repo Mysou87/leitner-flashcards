@@ -47,7 +47,12 @@
         <div class="panel">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
             <h3>Progression par élève</h3>
-            <button class="btn-secondary" id="btn-export-excel" style="width:auto">⬇ Exporter en Excel</button>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <select id="dash-group" style="width:auto;padding:8px 12px;font-size:0.88rem">
+                <option value="">Tous les groupes</option>
+              </select>
+              <button class="btn-secondary" id="btn-export-excel" style="width:auto">⬇ Exporter en Excel</button>
+            </div>
           </div>
           <div id="dash-progress"><div class="spinner">Chargement…</div></div>
         </div>

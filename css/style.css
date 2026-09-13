@@ -626,6 +626,26 @@ td {
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: #F8FAFC; }
 
+/* Ligne de séparation entre deux cours dans « Progression par élève » */
+tr.groupe-titre td {
+  background: #EFF6FF;
+  border-bottom: 1px solid var(--border);
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+  color: #1D4ED8;
+  padding: 9px 12px;
+}
+tr.groupe-titre:first-child td { border-top: none; }
+tr.groupe-titre:hover td { background: #EFF6FF; }
+tr.groupe-titre span {
+  float: right;
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: var(--text-light);
+}
+tr.groupe-titre span strong { color: var(--success-dark); font-weight: 700; }
+tr.groupe-titre span strong.aucun { color: var(--danger); }
+
 .badge {
   display: inline-block;
   padding: 3px 8px;

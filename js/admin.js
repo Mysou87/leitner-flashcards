@@ -95,12 +95,12 @@ async function loadDashboard() {
   }
 
   // Progression par élève
-  const progEl = document.getElementById('dash-progress');
   const [{ data: allStudents }, { data: allProgress }, { data: allSessions }, { data: allCardIds }] = await Promise.all([
     db.from('students').select('id, first_name, last_name, year_level').eq('is_active', true).order('last_name'),
     db.from('progress').select('student_id, card_id, box_level, next_review'),
     db.from('review_sessions').select('student_id, reviewed_at, deck_id, cards_reviewed, cards_correct'),
     db.from('cards').select('id, deck_id').eq('is_active', true),
+    chargerGroupes(), // composition des cours, lue dans les données de l'app de suivi
   ]);
 
   const studentMap = {};
@@ -136,7 +136,15 @@ async function loadDashboard() {
       lastSession[s.student_id] = s.reviewed_at;
   });
 
-  const rows = (allStudents || []).map(s => {
+  // Une semaine glissante, pour le « a révisé / n'a pas révisé » de chaque cours
+  const semaine = new Date();
+  semaine.setDate(semaine.getDate() - 7);
+  const semaineStr = semaine.toISOString();
+  const actifCetteSemaine = new Set(
+    (allSessions || []).filter(s => s.reviewed_at >= semaineStr).map(s => s.student_id)
+  );
+
+  dashRows = (allStudents || []).map(s => {
     const d = studentMap[s.id];
     const total = Object.values(d.boxes).reduce((a, b) => a + b, 0);
     const mastered = (d.boxes[7] || 0) + (d.boxes[8] || 0);
@@ -152,23 +160,88 @@ async function loadDashboard() {
     const unlocked = BADGE_DEFS.filter(b => b.check(badgeData));
     const badgeIcons = unlocked.map(b => b.icon).join('');
     const badgeTitle = unlocked.map(b => b.icon + ' ' + b.name).join(' · ');
-    return `<tr>
-      <td>${s.last_name} ${s.first_name}</td>
-      <td><span class="badge badge-blue">${s.year_level}</span></td>
-      <td>${total}</td>
-      <td>${mastered}</td>
-      <td>${days}</td>
-      <td>${last}</td>
-      <td>${status}</td>
-      <td style="font-size:1.1rem;letter-spacing:1px;min-width:80px" title="${badgeTitle}">${badgeIcons || '—'}</td>
-    </tr>`;
+    const groupe = (groupesParEleve.get(s.id) || [])[0] || null;
+    return {
+      groupe,
+      actif: actifCetteSemaine.has(s.id),
+      html: `<tr>
+        <td>${s.last_name} ${s.first_name}</td>
+        <td><span class="badge badge-blue">${groupe || s.year_level}</span></td>
+        <td>${total}</td>
+        <td>${mastered}</td>
+        <td>${days}</td>
+        <td>${last}</td>
+        <td>${status}</td>
+        <td style="font-size:1.1rem;letter-spacing:1px;min-width:80px" title="${badgeTitle}">${badgeIcons || '—'}</td>
+      </tr>`,
+    };
+  });
+
+  // Menu des groupes, en conservant le choix en cours
+  const select = document.getElementById('dash-group');
+  const choisi = select.value;
+  select.innerHTML = '<option value="">Tous les groupes</option>' +
+    groupesDisponibles.map(g => `<option value="${g.nom}">${g.nom}</option>`).join('') +
+    (dashRows.some(r => !r.groupe) ? '<option value="__sans__">Sans groupe</option>' : '');
+  select.value = choisi;
+  if (select.value !== choisi) select.value = '';
+
+  renderDashProgress();
+}
+
+// Progression par élève, découpée par cours : quand Laureline a un groupe
+// devant elle, elle veut voir d'un coup d'œil qui révise et qui ne révise pas.
+let dashRows = [];
+
+function renderDashProgress() {
+  const progEl = document.getElementById('dash-progress');
+  const filtre = document.getElementById('dash-group').value;
+  const entete = `<thead><tr><th>Élève</th><th>Groupe</th><th>Cartes vues</th><th>Maîtrisées (7+)</th>` +
+    `<th>Jours</th><th>Dernière révision</th><th>Statut</th><th>Badges</th></tr></thead>`;
+
+  // Sans données de suivi, pas de découpage possible : tableau simple, comme avant
+  if (groupesDisponibles.length === 0) {
+    document.getElementById('dash-group').classList.add('hidden');
+    const corps = dashRows.map(r => r.html).join('') ||
+      '<tr><td colspan="8" style="color:var(--text-light)">Aucun élève.</td></tr>';
+    progEl.innerHTML = `<div style="overflow-x:auto"><table>${entete}<tbody>${corps}</tbody></table></div>`;
+    return;
+  }
+  document.getElementById('dash-group').classList.remove('hidden');
+
+  // Sections dans l'ordre du menu, les élèves sans groupe à la fin
+  let sections = groupesDisponibles.map(g => ({
+    nom: g.nom,
+    lignes: dashRows.filter(r => r.groupe === g.nom),
+  }));
+  sections.push({ nom: 'Sans groupe', lignes: dashRows.filter(r => !r.groupe) });
+
+  if (filtre === '__sans__') sections = sections.filter(s => s.nom === 'Sans groupe');
+  else if (filtre) sections = sections.filter(s => s.nom === filtre);
+  sections = sections.filter(s => s.lignes.length > 0);
+
+  if (sections.length === 0) {
+    progEl.innerHTML = '<p class="hint">Aucun élève.</p>';
+    return;
+  }
+
+  const corps = sections.map(s => {
+    const n = s.lignes.length;
+    const actifs = s.lignes.filter(r => r.actif).length;
+    let bilan;
+    if (actifs === 0) bilan = `<strong class="aucun">aucun</strong> n'a révisé ces 7 derniers jours`;
+    else if (actifs === n) bilan = `<strong>${n > 1 ? 'tous ont' : 'a'}</strong> révisé ces 7 derniers jours`;
+    else bilan = `<strong>${actifs}</strong> ${actifs > 1 ? 'ont' : 'a'} révisé ces 7 derniers jours, ` +
+      `${n - actifs} non`;
+    const resume = `${n} élève${n > 1 ? 's' : ''} · ${bilan}`;
+    return `<tr class="groupe-titre"><td colspan="8">${s.nom}<span>${resume}</span></td></tr>` +
+      s.lignes.map(r => r.html).join('');
   }).join('');
 
-  progEl.innerHTML = `<div style="overflow-x:auto"><table>
-    <thead><tr><th>Élève</th><th>Année</th><th>Cartes vues</th><th>Maîtrisées (7+)</th><th>Jours</th><th>Dernière révision</th><th>Statut</th><th>Badges</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="7" style="color:var(--text-light)">Aucun élève.</td></tr>'}</tbody>
-  </table></div>`;
+  progEl.innerHTML = `<div style="overflow-x:auto"><table>${entete}<tbody>${corps}</tbody></table></div>`;
 }
+
+document.getElementById('dash-group').addEventListener('change', renderDashProgress);
 
 // ── ÉLÈVES ────────────────────────────────────────────────────
 let allStudents = [];
@@ -776,9 +849,17 @@ document.getElementById('btn-export-excel').addEventListener('click', async () =
     db.from('students').select('*').eq('is_active', true).order('last_name'),
     db.from('review_sessions').select('student_id, reviewed_at, cards_reviewed, cards_correct'),
     db.from('progress').select('student_id, box_level'),
+    chargerGroupes(),
   ]);
 
-  const students = studentsRes.data || [];
+  // Même découpage que le tableau de bord : les cours dans l'ordre, puis le reste
+  const rang = new Map(groupesDisponibles.map((g, i) => [g.nom, i]));
+  const groupeDe = id => (groupesParEleve.get(id) || [])[0] || '';
+  const students = (studentsRes.data || []).slice().sort((a, b) => {
+    const ra = rang.has(groupeDe(a.id)) ? rang.get(groupeDe(a.id)) : 99;
+    const rb = rang.has(groupeDe(b.id)) ? rang.get(groupeDe(b.id)) : 99;
+    return ra - rb || a.last_name.localeCompare(b.last_name, 'fr');
+  });
   const sessions = sessionsRes.data || [];
   const progress = progressRes.data || [];
 
@@ -795,7 +876,7 @@ document.getElementById('btn-export-excel').addEventListener('click', async () =
     progressByStudent[p.student_id].push(p.box_level);
   });
 
-  const rows = [['Nom', 'Prénom', 'Année', 'Sessions totales', 'Dernière révision', 'Cartes vues', 'Cartes maîtrisées (boîte 7+)', 'Score moyen (%)']];
+  const rows = [['Nom', 'Prénom', 'Groupe', 'Année', 'Sessions totales', 'Dernière révision', 'Cartes vues', 'Cartes maîtrisées (boîte 7+)', 'Score moyen (%)']];
 
   students.forEach(s => {
     const sSessions = sessionsByStudent[s.id] || [];
@@ -808,12 +889,12 @@ document.getElementById('btn-export-excel').addEventListener('click', async () =
     const avgScore = totalReviewed > 0 ? Math.round(totalCorrect / totalReviewed * 100) : 0;
     const mastered = sProgress.filter(b => b >= 7).length;
 
-    rows.push([s.last_name, s.first_name, s.year_level, sSessions.length, lastSession, sProgress.length, mastered, avgScore]);
+    rows.push([s.last_name, s.first_name, groupeDe(s.id), s.year_level, sSessions.length, lastSession, sProgress.length, mastered, avgScore]);
   });
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [14, 14, 6, 8, 14, 10, 16, 10].map(w => ({ wch: w }));
+  ws['!cols'] = [14, 14, 13, 6, 8, 14, 10, 16, 10].map(w => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws, 'Progression');
   XLSX.writeFile(wb, `flashcards_progression_${new Date().toISOString().split('T')[0]}.xlsx`);
 
