@@ -164,6 +164,11 @@ async function loadDashboard() {
     return {
       groupe,
       actif: actifCetteSemaine.has(s.id),
+      // valeurs de tri (une révision jamais faite = chaine vide, donc en dernier)
+      nom: `${s.last_name} ${s.first_name}`,
+      derniere: lastSession[s.id] || '',
+      jours: days,
+      cartes: total,
       html: `<tr>
         <td>${s.last_name} ${s.first_name}</td>
         <td><span class="badge badge-blue">${groupe || s.year_level}</span></td>
@@ -180,7 +185,8 @@ async function loadDashboard() {
   // Menu des groupes, en conservant le choix en cours
   const select = document.getElementById('dash-group');
   const choisi = select.value;
-  select.innerHTML = '<option value="">Tous les groupes</option>' +
+  select.innerHTML = '<option value="">Tous les groupes (séparés)</option>' +
+    '<option value="__melange__">Tous les élèves (mélangés)</option>' +
     groupesDisponibles.map(g => `<option value="${g.nom}">${g.nom}</option>`).join('') +
     (dashRows.some(r => !r.groupe) ? '<option value="__sans__">Sans groupe</option>' : '');
   select.value = choisi;
@@ -193,31 +199,47 @@ async function loadDashboard() {
 // devant elle, elle veut voir d'un coup d'œil qui révise et qui ne révise pas.
 let dashRows = [];
 
+// Les tris chiffrés vont du plus grand au plus petit ; à égalité on retombe
+// sur l'ordre alphabétique, pour que la liste ne bouge pas d'un affichage à l'autre.
+const TRIS_DASH = {
+  nom: (a, b) => a.nom.localeCompare(b.nom, 'fr'),
+  derniere: (a, b) => b.derniere.localeCompare(a.derniere) || a.nom.localeCompare(b.nom, 'fr'),
+  jours: (a, b) => b.jours - a.jours || a.nom.localeCompare(b.nom, 'fr'),
+  cartes: (a, b) => b.cartes - a.cartes || a.nom.localeCompare(b.nom, 'fr'),
+};
+
 function renderDashProgress() {
   const progEl = document.getElementById('dash-progress');
   const filtre = document.getElementById('dash-group').value;
+  const tri = TRIS_DASH[document.getElementById('dash-sort').value] || TRIS_DASH.nom;
   const entete = `<thead><tr><th>Élève</th><th>Groupe</th><th>Cartes vues</th><th>Maîtrisées (7+)</th>` +
     `<th>Jours</th><th>Dernière révision</th><th>Statut</th><th>Badges</th></tr></thead>`;
 
   // Sans données de suivi, pas de découpage possible : tableau simple, comme avant
   if (groupesDisponibles.length === 0) {
     document.getElementById('dash-group').classList.add('hidden');
-    const corps = dashRows.map(r => r.html).join('') ||
+    const corps = dashRows.slice().sort(tri).map(r => r.html).join('') ||
       '<tr><td colspan="8" style="color:var(--text-light)">Aucun élève.</td></tr>';
     progEl.innerHTML = `<div style="overflow-x:auto"><table>${entete}<tbody>${corps}</tbody></table></div>`;
     return;
   }
   document.getElementById('dash-group').classList.remove('hidden');
 
-  // Sections dans l'ordre du menu, les élèves sans groupe à la fin
-  let sections = groupesDisponibles.map(g => ({
-    nom: g.nom,
-    lignes: dashRows.filter(r => r.groupe === g.nom),
-  }));
-  sections.push({ nom: 'Sans groupe', lignes: dashRows.filter(r => !r.groupe) });
+  let sections;
+  if (filtre === '__melange__') {
+    // Un seul classement, groupes confondus : le tri porte sur toute l'école
+    sections = [{ nom: 'Tous les élèves', lignes: dashRows.slice().sort(tri) }];
+  } else {
+    // Sections dans l'ordre du menu, les élèves sans groupe à la fin
+    sections = groupesDisponibles.map(g => ({
+      nom: g.nom,
+      lignes: dashRows.filter(r => r.groupe === g.nom).sort(tri),
+    }));
+    sections.push({ nom: 'Sans groupe', lignes: dashRows.filter(r => !r.groupe).sort(tri) });
 
-  if (filtre === '__sans__') sections = sections.filter(s => s.nom === 'Sans groupe');
-  else if (filtre) sections = sections.filter(s => s.nom === filtre);
+    if (filtre === '__sans__') sections = sections.filter(s => s.nom === 'Sans groupe');
+    else if (filtre) sections = sections.filter(s => s.nom === filtre);
+  }
   sections = sections.filter(s => s.lignes.length > 0);
 
   if (sections.length === 0) {
@@ -242,6 +264,7 @@ function renderDashProgress() {
 }
 
 document.getElementById('dash-group').addEventListener('change', renderDashProgress);
+document.getElementById('dash-sort').addEventListener('change', renderDashProgress);
 
 // ── ÉLÈVES ────────────────────────────────────────────────────
 let allStudents = [];

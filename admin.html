@@ -49,7 +49,13 @@
             <h3>Progression par élève</h3>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <select id="dash-group" style="width:auto;padding:8px 12px;font-size:0.88rem">
-                <option value="">Tous les groupes</option>
+                <option value="">Tous les groupes (séparés)</option>
+              </select>
+              <select id="dash-sort" style="width:auto;padding:8px 12px;font-size:0.88rem">
+                <option value="nom">Trier par nom (A→Z)</option>
+                <option value="derniere">Révision la plus récente</option>
+                <option value="jours">Plus de jours de révision</option>
+                <option value="cartes">Plus de cartes vues</option>
               </select>
               <button class="btn-secondary" id="btn-export-excel" style="width:auto">⬇ Exporter en Excel</button>
             </div>
