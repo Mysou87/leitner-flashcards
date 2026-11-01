@@ -160,9 +160,10 @@ async function loadDashboard() {
     const unlocked = BADGE_DEFS.filter(b => b.check(badgeData));
     const badgeIcons = unlocked.map(b => b.icon).join('');
     const badgeTitle = unlocked.map(b => b.icon + ' ' + b.name).join(' · ');
-    const groupe = (groupesParEleve.get(s.id) || [])[0] || null;
+    // Un élève peut suivre plusieurs cours (sciences chez Laureline, maths chez Nico)
+    const groupes = groupesParEleve.get(s.id) || [];
     return {
-      groupe,
+      groupes,
       actif: actifCetteSemaine.has(s.id),
       // valeurs de tri (une révision jamais faite = chaine vide, donc en dernier)
       nom: `${s.last_name} ${s.first_name}`,
@@ -171,7 +172,7 @@ async function loadDashboard() {
       cartes: total,
       html: `<tr>
         <td>${s.last_name} ${s.first_name}</td>
-        <td><span class="badge badge-blue">${groupe || s.year_level}</span></td>
+        <td><span class="badge badge-blue">${groupes.join(', ') || s.year_level}</span></td>
         <td>${total}</td>
         <td>${mastered}</td>
         <td>${days}</td>
@@ -188,7 +189,7 @@ async function loadDashboard() {
   select.innerHTML = '<option value="">Tous les groupes (séparés)</option>' +
     '<option value="__melange__">Tous les élèves (mélangés)</option>' +
     groupesDisponibles.map(g => `<option value="${g.nom}">${g.nom}</option>`).join('') +
-    (dashRows.some(r => !r.groupe) ? '<option value="__sans__">Sans groupe</option>' : '');
+    (dashRows.some(r => r.groupes.length === 0) ? '<option value="__sans__">Sans groupe</option>' : '');
   select.value = choisi;
   if (select.value !== choisi) select.value = '';
 
@@ -230,12 +231,13 @@ function renderDashProgress() {
     // Un seul classement, groupes confondus : le tri porte sur toute l'école
     sections = [{ nom: 'Tous les élèves', lignes: dashRows.slice().sort(tri) }];
   } else {
-    // Sections dans l'ordre du menu, les élèves sans groupe à la fin
+    // Sections dans l'ordre du menu, les élèves sans groupe à la fin.
+    // Un élève qui suit plusieurs cours apparait dans chacun.
     sections = groupesDisponibles.map(g => ({
       nom: g.nom,
-      lignes: dashRows.filter(r => r.groupe === g.nom).sort(tri),
+      lignes: dashRows.filter(r => r.groupes.includes(g.nom)).sort(tri),
     }));
-    sections.push({ nom: 'Sans groupe', lignes: dashRows.filter(r => !r.groupe).sort(tri) });
+    sections.push({ nom: 'Sans groupe', lignes: dashRows.filter(r => r.groupes.length === 0).sort(tri) });
 
     if (filtre === '__sans__') sections = sections.filter(s => s.nom === 'Sans groupe');
     else if (filtre) sections = sections.filter(s => s.nom === filtre);
@@ -439,23 +441,72 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
   await loadStudents();
 });
 
+// ── FILTRES ANNÉE / COURS (onglets Paquets et Interroger) ─────
+// Le dernier choix est retenu dans le navigateur : Nico retrouve ses paquets
+// de maths, Laureline les siens. Sans stockage possible, on repart de « Tous ».
+function lireFiltre(cle) {
+  try { return localStorage.getItem(cle) || ''; } catch { return ''; }
+}
+function ecrireFiltre(cle, valeur) {
+  try { localStorage.setItem(cle, valeur); } catch { /* sans importance */ }
+}
+
+// Remplit les deux menus à partir des paquets existants, en gardant le choix en cours
+function remplirFiltres(prefixe, decks) {
+  const remplir = (id, valeurs, tous) => {
+    const select = document.getElementById(id);
+    const choisi = select.options.length ? select.value : lireFiltre(`filtre-${id}`);
+    select.innerHTML = `<option value="">${tous}</option>` +
+      valeurs.map(v => `<option value="${v}">${v}</option>`).join('');
+    select.value = valeurs.includes(choisi) ? choisi : '';
+  };
+  const unique = champ => [...new Set(decks.map(d => d[champ]).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'fr'));
+  remplir(`${prefixe}-filter-year`, unique('year_level'), 'Toutes');
+  remplir(`${prefixe}-filter-subject`, unique('subject'), 'Tous');
+}
+
+function filtrerPaquets(prefixe, decks) {
+  const annee = document.getElementById(`${prefixe}-filter-year`).value;
+  const cours = document.getElementById(`${prefixe}-filter-subject`).value;
+  return decks.filter(d => (!annee || d.year_level === annee) && (!cours || d.subject === cours));
+}
+
+function brancherFiltres(prefixe, redessiner) {
+  ['year', 'subject'].forEach(champ => {
+    const id = `${prefixe}-filter-${champ}`;
+    document.getElementById(id).addEventListener('change', (e) => {
+      ecrireFiltre(`filtre-${id}`, e.target.value);
+      redessiner();
+    });
+  });
+}
+
 // ── PAQUETS ───────────────────────────────────────────────────
 let allDecks = [];
+let decksCardCount = {};
 
 async function loadDecks() {
   const { data: decks } = await db.from('decks').select('*').order('year_level').order('name');
   const { data: cards } = await db.from('cards').select('deck_id').eq('is_active', true);
 
   allDecks = decks || [];
-  const cardCount = {};
-  (cards || []).forEach(c => { cardCount[c.deck_id] = (cardCount[c.deck_id] || 0) + 1; });
+  decksCardCount = {};
+  (cards || []).forEach(c => { decksCardCount[c.deck_id] = (decksCardCount[c.deck_id] || 0) + 1; });
 
+  remplirFiltres('decks', allDecks);
+  renderDecks();
+}
+
+function renderDecks() {
+  const cardCount = decksCardCount;
   const tbody = document.getElementById('decks-tbody');
-  if (allDecks.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-light)">Aucun paquet.</td></tr>';
+  const visibles = filtrerPaquets('decks', allDecks);
+  if (visibles.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-light)">${allDecks.length ? 'Aucun paquet pour ce filtre.' : 'Aucun paquet.'}</td></tr>`;
     return;
   }
-  tbody.innerHTML = allDecks.map(d => `
+  tbody.innerHTML = visibles.map(d => `
     <tr>
       <td><strong>${d.name}</strong></td>
       <td>${d.subject}</td>
@@ -471,6 +522,8 @@ async function loadDecks() {
       </td>
     </tr>`).join('');
 }
+
+brancherFiltres('decks', renderDecks);
 
 document.getElementById('form-add-deck').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -570,21 +623,21 @@ async function loadAssign() {
   // Groupes : s'ils sont illisibles, on retire l'option et on repasse à l'année
   const ligneGroupe = document.getElementById('assign-row-group');
   const radioGroupe = document.querySelector('input[name="assign-scope"][value="group"]');
-  const selectGroupe = document.getElementById('assign-group');
+  const casesGroupes = document.getElementById('assign-groups');
   if (groupesDisponibles.length === 0) {
     ligneGroupe.classList.add('hidden');
     if (radioGroupe.checked) {
       document.querySelector('input[name="assign-scope"][value="year"]').checked = true;
-      majAssignScope();
     }
   } else {
     ligneGroupe.classList.remove('hidden');
-    const choisi = selectGroupe.value;
-    selectGroupe.innerHTML = groupesDisponibles
-      .map(g => `<option value="${g.nom}">${g.nom} (${g.eleves.length} élèves)</option>`)
+    // On garde les groupes déjà cochés d'un affichage à l'autre
+    const choisis = new Set(groupesCoches());
+    casesGroupes.innerHTML = groupesDisponibles
+      .map(g => `<label class="quiz-option"><input type="checkbox" value="${g.nom}"${choisis.has(g.nom) ? ' checked' : ''}> ${g.nom} (${g.eleves.length})</label>`)
       .join('');
-    if (groupesDisponibles.some(g => g.nom === choisi)) selectGroupe.value = choisi;
   }
+  majAssignScope();
   const dejaCoches = (selRes.data || []).filter(s => s.selected).length;
   const paquet = allDecks.find(d => d.id === currentDeckId);
 
@@ -633,11 +686,15 @@ function portee() {
   return document.querySelector('input[name="assign-scope"]:checked').value;
 }
 
+function groupesCoches() {
+  return [...document.querySelectorAll('#assign-groups input:checked')].map(c => c.value);
+}
+
 function majAssignScope() {
   const p = portee();
   document.getElementById('assign-students-wrap').classList.toggle('hidden', p !== 'students');
   document.getElementById('assign-year').disabled = p !== 'year';
-  document.getElementById('assign-group').disabled = p !== 'group';
+  document.getElementById('assign-groups').classList.toggle('disabled', p !== 'group');
 }
 
 document.querySelectorAll('input[name="assign-scope"]').forEach(r => {
@@ -664,14 +721,22 @@ async function appliquerAssign(selected) {
       return;
     }
   } else if (p === 'group') {
-    const nom = document.getElementById('assign-group').value;
-    const groupe = groupesDisponibles.find(g => g.nom === nom);
-    // On ne garde que les élèves encore actifs dans Leitner
+    const noms = groupesCoches();
+    if (noms.length === 0) {
+      showMsg('assign-msg', 'Coche au moins un groupe.', true);
+      return;
+    }
+    // Un élève présent dans deux des groupes choisis n'est compté qu'une fois,
+    // et on ne garde que les élèves encore actifs dans Leitner
     const actifs = new Set(assignStudents.map(e => e.id));
-    cibles = (groupe ? groupe.eleves : []).filter(id => actifs.has(id));
-    quoi = `${cibles.length} élève(s) du groupe ${nom}`;
+    const ids = new Set(groupesDisponibles
+      .filter(g => noms.includes(g.nom))
+      .flatMap(g => g.eleves));
+    cibles = [...ids].filter(id => actifs.has(id));
+    const liste = noms.join(', ');
+    quoi = `${cibles.length} élève(s) ${noms.length > 1 ? 'des groupes' : 'du groupe'} ${liste}`;
     if (cibles.length === 0) {
-      showMsg('assign-msg', `Aucun élève actif dans le groupe ${nom}.`, true);
+      showMsg('assign-msg', `Aucun élève actif dans ${noms.length > 1 ? 'ces groupes' : 'ce groupe'}.`, true);
       return;
     }
   } else {
@@ -878,6 +943,7 @@ document.getElementById('btn-export-excel').addEventListener('click', async () =
   // Même découpage que le tableau de bord : les cours dans l'ordre, puis le reste
   const rang = new Map(groupesDisponibles.map((g, i) => [g.nom, i]));
   const groupeDe = id => (groupesParEleve.get(id) || [])[0] || '';
+  const tousGroupes = id => (groupesParEleve.get(id) || []).join(', ');
   const students = (studentsRes.data || []).slice().sort((a, b) => {
     const ra = rang.has(groupeDe(a.id)) ? rang.get(groupeDe(a.id)) : 99;
     const rb = rang.has(groupeDe(b.id)) ? rang.get(groupeDe(b.id)) : 99;
@@ -912,7 +978,7 @@ document.getElementById('btn-export-excel').addEventListener('click', async () =
     const avgScore = totalReviewed > 0 ? Math.round(totalCorrect / totalReviewed * 100) : 0;
     const mastered = sProgress.filter(b => b >= 7).length;
 
-    rows.push([s.last_name, s.first_name, groupeDe(s.id), s.year_level, sSessions.length, lastSession, sProgress.length, mastered, avgScore]);
+    rows.push([s.last_name, s.first_name, tousGroupes(s.id), s.year_level, sSessions.length, lastSession, sProgress.length, mastered, avgScore]);
   });
 
   const wb = XLSX.utils.book_new();
@@ -1052,6 +1118,11 @@ function rendreContenu(el, texte) {
   });
 }
 
+let quizDecks = [];
+let quizParPaquet = {};
+// Paquets cochés, conservés quand on change de filtre puis qu'on revient
+const quizCoches = new Set();
+
 async function loadQuizDecks() {
   const container = document.getElementById('quiz-decks-list');
   const { data: decks } = await db
@@ -1061,12 +1132,25 @@ async function loadQuizDecks() {
     .order('name');
 
   const { data: cards } = await db.from('cards').select('deck_id').eq('is_active', true);
-  const parPaquet = {};
-  (cards || []).forEach(c => { parPaquet[c.deck_id] = (parPaquet[c.deck_id] || 0) + 1; });
+  quizParPaquet = {};
+  (cards || []).forEach(c => { quizParPaquet[c.deck_id] = (quizParPaquet[c.deck_id] || 0) + 1; });
 
-  const actifs = (decks || []).filter(d => d.is_active);
-  if (actifs.length === 0) {
+  quizDecks = (decks || []).filter(d => d.is_active);
+  if (quizDecks.length === 0) {
     container.innerHTML = '<p class="hint">Aucun paquet actif.</p>';
+    return;
+  }
+
+  remplirFiltres('quiz', quizDecks);
+  renderQuizDecks();
+}
+
+function renderQuizDecks() {
+  const container = document.getElementById('quiz-decks-list');
+  const parPaquet = quizParPaquet;
+  const actifs = filtrerPaquets('quiz', quizDecks);
+  if (actifs.length === 0) {
+    container.innerHTML = '<p class="hint">Aucun paquet pour ce filtre.</p>';
     return;
   }
 
@@ -1086,7 +1170,7 @@ async function loadQuizDecks() {
       </div>
       ${groupes[annee].map(d => `
         <label class="quiz-deck">
-          <input type="checkbox" value="${d.id}" data-annee="${annee}">
+          <input type="checkbox" value="${d.id}" data-annee="${annee}"${quizCoches.has(d.id) ? ' checked' : ''}>
           <span class="quiz-deck-nom">${d.name}</span>
           <span class="quiz-deck-meta">${d.subject || ''} · ${parPaquet[d.id] || 0} cartes</span>
         </label>`).join('')}
@@ -1097,10 +1181,20 @@ async function loadQuizDecks() {
     btn.addEventListener('click', () => {
       const cases = container.querySelectorAll(`input[data-annee="${btn.dataset.annee}"]`);
       const tousCoches = [...cases].every(c => c.checked);
-      cases.forEach(c => { c.checked = !tousCoches; });
+      cases.forEach(c => {
+        c.checked = !tousCoches;
+        if (c.checked) quizCoches.add(c.value); else quizCoches.delete(c.value);
+      });
     });
   });
 }
+
+document.getElementById('quiz-decks-list').addEventListener('change', (e) => {
+  if (e.target.type !== 'checkbox') return;
+  if (e.target.checked) quizCoches.add(e.target.value); else quizCoches.delete(e.target.value);
+});
+
+brancherFiltres('quiz', renderQuizDecks);
 
 document.getElementById('btn-quiz-show').addEventListener('click', async () => {
   const choisis = [...document.querySelectorAll('#quiz-decks-list input:checked')].map(c => c.value);

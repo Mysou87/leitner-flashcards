@@ -167,6 +167,10 @@
 
         <div class="panel">
           <h3>Liste des paquets</h3>
+          <div class="filtres">
+            <label>Année <select id="decks-filter-year"></select></label>
+            <label>Cours <select id="decks-filter-subject"></select></label>
+          </div>
           <div style="overflow-x:auto">
             <table id="decks-table">
               <thead>
@@ -194,9 +198,11 @@
         <div class="panel">
           <h3>Donner ce paquet à des élèves</h3>
           <p class="hint" id="assign-state">…</p>
-          <div class="assign-row" id="assign-row-group">
-            <label class="quiz-option"><input type="radio" name="assign-scope" value="group" checked> Un groupe</label>
-            <select id="assign-group" style="width:auto"></select>
+          <div id="assign-row-group">
+            <div class="assign-row">
+              <label class="quiz-option"><input type="radio" name="assign-scope" value="group" checked> Un ou plusieurs groupes</label>
+            </div>
+            <div id="assign-groups" class="assign-groups"></div>
           </div>
           <div class="assign-row">
             <label class="quiz-option"><input type="radio" name="assign-scope" value="year"> Toute une année</label>
@@ -292,6 +298,10 @@
 
         <div class="panel no-print">
           <h3>Choisir les paquets</h3>
+          <div class="filtres">
+            <label>Année <select id="quiz-filter-year"></select></label>
+            <label>Cours <select id="quiz-filter-subject"></select></label>
+          </div>
           <div id="quiz-decks-list" class="quiz-decks"><div class="spinner">Chargement…</div></div>
           <div class="quiz-actions">
             <button class="btn-secondary" id="btn-quiz-show" style="width:auto">Afficher les questions</button>
