@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Source des icônes de l'app (même style plat que l'inventaire du labo).
+       Les PNG d'icones/ sont rendus depuis ce fichier. -->
+  <rect width="512" height="512" fill="#0284C7"/>
+  <!-- carte du fond -->
+  <g transform="rotate(-14 256 256)">
+    <rect x="146" y="166" width="220" height="160" rx="22" fill="#FDE68A"/>
+  </g>
+  <!-- carte du devant -->
+  <g transform="rotate(7 256 256)">
+    <rect x="150" y="196" width="230" height="166" rx="22" fill="#FFFFFF"/>
+    <text x="265" y="320" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+          font-size="128" font-weight="800" fill="#0EA5E9">?</text>
+  </g>
+  <!-- coche verte -->
+  <circle cx="362" cy="182" r="44" fill="#22C55E"/>
+  <path d="M340 183 l15 15 l27 -30" fill="none" stroke="#FFFFFF" stroke-width="13"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
