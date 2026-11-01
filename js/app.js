@@ -162,9 +162,9 @@ async function loadDecksView({ silent = false } = {}) {
 
   const [decksRes, progressRes, cardsRes, sessionsRes, selectionsRes] = await Promise.all([
     db.from('decks').select('*').eq('is_active', true),
-    db.from('progress').select('card_id, box_level, next_review, first_seen').eq('student_id', student.id),
-    db.from('cards').select('id, deck_id').eq('is_active', true),
-    db.from('review_sessions').select('reviewed_at, deck_id, cards_reviewed, cards_correct').eq('student_id', student.id),
+    toutesLesLignes(() => db.from('progress').select('card_id, box_level, next_review, first_seen').eq('student_id', student.id)),
+    toutesLesLignes(() => db.from('cards').select('id, deck_id').eq('is_active', true)),
+    toutesLesLignes(() => db.from('review_sessions').select('reviewed_at, deck_id, cards_reviewed, cards_correct').eq('student_id', student.id)),
     // select('*') plutôt que la liste des colonnes : si la colonne
     // « a_annoncer » n'existe pas encore en base, la requête passe quand même
     // et l'annonce reste simplement muette.
@@ -554,11 +554,11 @@ async function startSession(paquets) {
   const progressMap = Object.fromEntries(allProgress.map(p => [p.card_id, p]));
 
   // Charger les cartes complètes des paquets concernés
-  const { data: cards } = await db
+  const { data: cards } = await toutesLesLignes(() => db
     .from('cards')
     .select('*')
     .in('deck_id', decks.map(d => d.id))
-    .eq('is_active', true);
+    .eq('is_active', true));
 
   // Cartes déjà vues et dues aujourd'hui
   const dueCards = (cards || []).filter(c => {

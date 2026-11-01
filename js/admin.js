@@ -49,20 +49,21 @@ async function loadDashboard() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
   const [sessionsRes, studentsRes, cardsRes, progressRes] = await Promise.all([
-    db.from('review_sessions')
+    toutesLesLignes(() => db.from('review_sessions')
       .select('*, students(first_name, last_name), decks(name)')
       .gte('reviewed_at', sevenDaysAgo.toISOString())
-      .order('reviewed_at', { ascending: false }),
+      .order('reviewed_at', { ascending: false })),
     db.from('students').select('id', { count: 'exact' }).eq('is_active', true),
     db.from('cards').select('id', { count: 'exact' }).eq('is_active', true),
-    db.from('progress').select('box_level'),
+    // Compté par la base : pas de lignes à rapatrier, donc pas de plafond de 1000
+    db.from('progress').select('id', { count: 'exact', head: true }).gte('box_level', 7),
   ]);
 
   const sessions = sessionsRes.data || [];
   const todayStr = new Date().toISOString().split('T')[0];
   const todaySessions = sessions.filter(s => s.reviewed_at.startsWith(todayStr));
   const activeStudents = new Set(todaySessions.map(s => s.student_id)).size;
-  const masteredCards = (progressRes.data || []).filter(p => p.box_level >= 7).length;
+  const masteredCards = progressRes.count || 0;
 
   document.getElementById('dash-stats').innerHTML = `
     <div class="stat-box"><div class="number">${studentsRes.count || 0}</div><div class="label">Élèves actifs</div></div>
@@ -97,9 +98,9 @@ async function loadDashboard() {
   // Progression par élève
   const [{ data: allStudents }, { data: allProgress }, { data: allSessions }, { data: allCardIds }] = await Promise.all([
     db.from('students').select('id, first_name, last_name, year_level').eq('is_active', true).order('last_name'),
-    db.from('progress').select('student_id, card_id, box_level, next_review'),
-    db.from('review_sessions').select('student_id, reviewed_at, deck_id, cards_reviewed, cards_correct'),
-    db.from('cards').select('id, deck_id').eq('is_active', true),
+    toutesLesLignes(() => db.from('progress').select('student_id, card_id, box_level, next_review')),
+    toutesLesLignes(() => db.from('review_sessions').select('student_id, reviewed_at, deck_id, cards_reviewed, cards_correct')),
+    toutesLesLignes(() => db.from('cards').select('id, deck_id').eq('is_active', true)),
     chargerGroupes(), // composition des cours, lue dans les données de l'app de suivi
   ]);
 
@@ -488,7 +489,7 @@ let decksCardCount = {};
 
 async function loadDecks() {
   const { data: decks } = await db.from('decks').select('*').order('year_level').order('name');
-  const { data: cards } = await db.from('cards').select('deck_id').eq('is_active', true);
+  const { data: cards } = await toutesLesLignes(() => db.from('cards').select('deck_id').eq('is_active', true));
 
   allDecks = decks || [];
   decksCardCount = {};
@@ -935,8 +936,8 @@ document.getElementById('btn-export-excel').addEventListener('click', async () =
 
   const [studentsRes, sessionsRes, progressRes] = await Promise.all([
     db.from('students').select('*').eq('is_active', true).order('last_name'),
-    db.from('review_sessions').select('student_id, reviewed_at, cards_reviewed, cards_correct'),
-    db.from('progress').select('student_id, box_level'),
+    toutesLesLignes(() => db.from('review_sessions').select('student_id, reviewed_at, cards_reviewed, cards_correct')),
+    toutesLesLignes(() => db.from('progress').select('student_id, box_level')),
     chargerGroupes(),
   ]);
 
@@ -1131,7 +1132,7 @@ async function loadQuizDecks() {
     .order('year_level')
     .order('name');
 
-  const { data: cards } = await db.from('cards').select('deck_id').eq('is_active', true);
+  const { data: cards } = await toutesLesLignes(() => db.from('cards').select('deck_id').eq('is_active', true));
   quizParPaquet = {};
   (cards || []).forEach(c => { quizParPaquet[c.deck_id] = (quizParPaquet[c.deck_id] || 0) + 1; });
 
@@ -1207,11 +1208,11 @@ document.getElementById('btn-quiz-show').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Chargement…';
 
-  const { data: cards, error } = await db
+  const { data: cards, error } = await toutesLesLignes(() => db
     .from('cards')
     .select('front, back, deck_id')
     .in('deck_id', choisis)
-    .eq('is_active', true);
+    .eq('is_active', true));
 
   btn.disabled = false;
   btn.textContent = 'Afficher les questions';

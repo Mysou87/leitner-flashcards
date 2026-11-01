@@ -39,3 +39,22 @@ const GROUPES_ELEVES = [
 ];
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Supabase ne renvoie jamais plus de 1000 lignes par requête, et les lignes
+// en trop sont perdues SANS erreur (c'est ce qui affichait « 0 carte » pour
+// les derniers paquets importés). toutesLesLignes() charge par tranches
+// jusqu'à la dernière. `requete` est une fonction qui reconstruit la requête,
+// car un objet requête Supabase ne s'exécute qu'une fois.
+// Exemple : toutesLesLignes(() => db.from('cards').select('id, deck_id'))
+async function toutesLesLignes(requete) {
+  const TRANCHE = 1000;
+  const lignes = [];
+  for (let debut = 0; ; debut += TRANCHE) {
+    // Tri sur id en dernier critère : sans ordre stable, deux tranches
+    // pourraient se chevaucher ou sauter des lignes.
+    const { data, error } = await requete().order('id').range(debut, debut + TRANCHE - 1);
+    if (error) return { data: null, error };
+    lignes.push(...data);
+    if (data.length < TRANCHE) return { data: lignes, error: null };
+  }
+}
