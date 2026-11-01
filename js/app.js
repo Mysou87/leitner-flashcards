@@ -284,9 +284,57 @@ function renderDeckSelectionLink() {
   document.getElementById('deck-selection-summary').textContent = `${selectedCount} / ${allDecks.length} sélectionnés`;
 }
 
-function renderDeckSelectionView() {
+// ── Onglets par matière ───────────────────────────────────────
+// Un onglet par matière (champ « Matière » du paquet), comme dans l'app de
+// suivi : un élève de 5e trouve ses paquets sous Chimie, Physique, Maths.
+// Les matières de son année d'abord, puis les autres. Le dernier onglet
+// choisi est mémorisé séparément pour l'accueil et pour « Mes paquets ».
+function matieresTriees(decks) {
   const myYear = student.year_level;
-  const sorted = [...allDecks].sort((a, b) => {
+  const deMonAnnee = new Set(decks.filter(d => d.year_level === myYear).map(d => d.subject || 'Autre'));
+  return [...new Set(decks.map(d => d.subject || 'Autre'))].sort((a, b) => {
+    const am = deMonAnnee.has(a) ? 0 : 1;
+    const bm = deMonAnnee.has(b) ? 0 : 1;
+    return am - bm || a.localeCompare(b);
+  });
+}
+
+function ongletMemorise(vue, matieres) {
+  let m = null;
+  try { m = localStorage.getItem('leitner_onglet_' + vue); } catch (e) { /* stockage bloqué */ }
+  return matieres.includes(m) ? m : matieres[0];
+}
+
+function memoriserOnglet(vue, matiere) {
+  try { localStorage.setItem('leitner_onglet_' + vue, matiere); } catch (e) { /* stockage bloqué */ }
+}
+
+// `pastilles` : nombre affiché à côté du nom de la matière (cartes dues), facultatif
+function dessinerOnglets(container, matieres, actif, pastilles, auClic) {
+  const barre = document.createElement('div');
+  barre.className = 'onglets-matieres';
+  matieres.forEach(m => {
+    const bouton = document.createElement('button');
+    bouton.type = 'button';
+    bouton.className = 'onglet-matiere' + (m === actif ? ' actif' : '');
+    bouton.textContent = m;
+    const n = pastilles && pastilles[m];
+    if (n > 0) {
+      const pastille = document.createElement('span');
+      pastille.className = 'onglet-pastille';
+      pastille.textContent = n;
+      bouton.appendChild(pastille);
+    }
+    bouton.addEventListener('click', () => auClic(m));
+    barre.appendChild(bouton);
+  });
+  container.appendChild(barre);
+}
+
+// Paquets groupés par année, celle de l'élève en premier, puis par nom
+function grouperParAnnee(decks) {
+  const myYear = student.year_level;
+  const sorted = [...decks].sort((a, b) => {
     const am = a.year_level === myYear ? 0 : 1;
     const bm = b.year_level === myYear ? 0 : 1;
     if (am !== bm) return am - bm;
@@ -300,9 +348,25 @@ function renderDeckSelectionView() {
     if (!groups[k]) groups[k] = [];
     groups[k].push(d);
   });
+  return groups;
+}
 
+function renderDeckSelectionView() {
+  const myYear = student.year_level;
   const container = document.getElementById('deck-selection-list');
   container.innerHTML = '';
+
+  const matieres = matieresTriees(allDecks);
+  let decks = allDecks;
+  if (matieres.length > 1) {
+    const actif = ongletMemorise('paquets', matieres);
+    dessinerOnglets(container, matieres, actif, null, m => {
+      memoriserOnglet('paquets', m);
+      renderDeckSelectionView();
+    });
+    decks = allDecks.filter(d => (d.subject || 'Autre') === actif);
+  }
+  const groups = grouperParAnnee(decks);
 
   Object.keys(groups).forEach(year => {
     const section = document.createElement('div');
@@ -463,24 +527,7 @@ function renderDecks() {
   const totalNouvelles = visibleDecks.reduce((n, d) => n + stats[d.id].new_total, 0);
   const totalSession = totalDues + Math.min(restantGlobal, totalNouvelles);
 
-  // Trier : année de l'élève en premier, puis alphabétique
   const myYear = student.year_level;
-  const sorted = [...visibleDecks].sort((a, b) => {
-    const am = a.year_level === myYear ? 0 : 1;
-    const bm = b.year_level === myYear ? 0 : 1;
-    if (am !== bm) return am - bm;
-    return (a.year_level || '').localeCompare(b.year_level || '') ||
-           a.name.localeCompare(b.name);
-  });
-
-  // Grouper par année
-  const groups = {};
-  sorted.forEach(d => {
-    const k = d.year_level || 'Autre';
-    if (!groups[k]) groups[k] = [];
-    groups[k].push(d);
-  });
-
   const container = document.getElementById('decks-list');
   container.innerHTML = '';
 
@@ -512,6 +559,25 @@ function renderDecks() {
   const separateur = document.createElement('h2');
   separateur.textContent = 'Ou un paquet à la fois';
   container.appendChild(separateur);
+
+  // Onglets seulement s'il y a au moins deux matières parmi les paquets cochés.
+  // « Tout réviser » au-dessus reste commun à toutes les matières.
+  const matieres = matieresTriees(visibleDecks);
+  let decksOnglet = visibleDecks;
+  if (matieres.length > 1) {
+    const actif = ongletMemorise('accueil', matieres);
+    const duesParMatiere = {};
+    visibleDecks.forEach(d => {
+      const m = d.subject || 'Autre';
+      duesParMatiere[m] = (duesParMatiere[m] || 0) + stats[d.id].due;
+    });
+    dessinerOnglets(container, matieres, actif, duesParMatiere, m => {
+      memoriserOnglet('accueil', m);
+      renderDecks();
+    });
+    decksOnglet = visibleDecks.filter(d => (d.subject || 'Autre') === actif);
+  }
+  const groups = grouperParAnnee(decksOnglet);
 
   Object.keys(groups).forEach(year => {
     const section = document.createElement('div');

@@ -348,6 +348,40 @@ label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); margin-b
 .deck-card.revise-tout .due-badge { background: white; color: var(--primary-dark); }
 .deck-card.revise-tout .due-badge.up-to-date { background: rgba(255,255,255,0.25); color: white; }
 
+/* ─── ONGLETS PAR MATIÈRE ────────────────────────────────── */
+.onglets-matieres {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 18px;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.onglet-matiere {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: white;
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.onglet-matiere.actif { background: var(--primary); border-color: var(--primary); color: white; }
+.onglet-pastille {
+  background: var(--primary);
+  color: white;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.onglet-matiere.actif .onglet-pastille { background: white; color: var(--primary-dark); }
+
 /* ─── TOGGLE SWITCH ──────────────────────────────────────── */
 .toggle-switch {
   position: relative;
